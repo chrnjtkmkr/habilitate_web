@@ -1,0 +1,38 @@
+# Node
+node_modules/
+dist/
+build/
+.next/
+coverage/
+
+# Python
+__pycache__/
+.venv/
+*.pyc
+.pytest_cache/
+
+# macOS
+.DS_Store
+.AppleDouble
+
+# VS Code (keep extensions.json if present)
+.vscode/*
+!.vscode/extensions.json
+
+# Environment files
+.env
+.env.*.local
+
+# Supabase local
+.supabase/
+supabase/.temp/
+
+# Logs
+*.log
+npm-debug.log*
+
+# IDE
+.idea/
+.vercel
+.env.local
+supabase/.branches/
