@@ -123,8 +123,8 @@ export class PitchDetector {
     // 2. Spectral Analysis with 85 Hz High-Pass Filter & Brightness Scoring
     const { brightnessScore, lowBandActive, highBandActive } = this.analyzeSpectrum(audioData);
 
-    // 3. Autocorrelation for F0 (Search range: 85 Hz to 420 Hz)
-    const minLag = Math.floor(this.sampleRate / 420); // 420 Hz max search
+    // 3. Autocorrelation for F0 (Search range: 85 Hz to 450 Hz)
+    const minLag = Math.floor(this.sampleRate / 450); // 450 Hz max search
     const maxLag = Math.floor(this.sampleRate / 85);  // 85 Hz min search (High-Pass cutoff)
 
     let bestCorrelation = 0;
@@ -174,29 +174,29 @@ export class PitchDetector {
     if (confidence < this.minConfidence || isTransientImpulse) {
       rawState = 'noise';
     } else {
-      // Dual-Band Overlap & Adaptive Child Brightness Matrix (V >= 0.32)
-      if (lowBandActive && highBandActive && brightnessScore >= 0.32 && isPitchStable) {
+      // Dual-Band Overlap & Adaptive Child Brightness Matrix (V >= 0.28)
+      if (lowBandActive && highBandActive && brightnessScore >= 0.28 && isPitchStable) {
         rawState = 'child_voice';
-      } else if (lowBandActive && !highBandActive && frequency >= 85 && frequency < 250) {
+      } else if (lowBandActive && !highBandActive && frequency >= 85 && frequency < 220) {
         rawState = 'adult_voice';
-      } else if (!lowBandActive && highBandActive && brightnessScore >= 0.32 && frequency >= 250 && frequency <= 420 && isPitchStable) {
+      } else if (!lowBandActive && highBandActive && brightnessScore >= 0.28 && frequency >= 220 && frequency <= 450 && isPitchStable) {
         rawState = 'child_voice';
       } else {
         // Refined Pitch Bounds & Adaptive Brightness Disambiguation:
-        if (frequency >= 250 && frequency <= 420) {
-          // Candidate Child Frame: REQUIRE V >= 0.32 AND Pitch Stability
-          if (brightnessScore >= 0.32 && isPitchStable) {
+        if (frequency >= 220 && frequency <= 450) {
+          // Candidate Child Frame: REQUIRE V >= 0.28 AND Pitch Stability
+          if (brightnessScore >= 0.28 && isPitchStable) {
             rawState = 'child_voice';
-          } else if (brightnessScore < 0.32) {
+          } else if (brightnessScore < 0.28) {
             rawState = 'adult_voice'; // Adult female voice harmonic inflection
           } else {
             rawState = 'noise'; // Unstable pitch -> transient toy noise
           }
-        } else if (frequency >= 85 && frequency < 250) {
+        } else if (frequency >= 85 && frequency < 220) {
           // Candidate Adult Frame
           rawState = isPitchStable || lowBandActive ? 'adult_voice' : 'noise';
         } else {
-          // Frequency outside 85-420 Hz range (thud < 85Hz or squeak > 420Hz)
+          // Frequency outside 85-450 Hz range (thud < 85Hz or squeak > 450Hz)
           rawState = 'noise';
         }
       }
@@ -277,8 +277,8 @@ export class PitchDetector {
     const normHighRms = Math.sqrt(energyHighBand) / N;
 
     // Active band thresholds with sensible floor (0.001)
-    const lowBandActive = normLowRms >= Math.min(this.silenceThreshold * 0.4, 0.001);
-    const highBandActive = normHighRms >= Math.min(this.silenceThreshold * 0.4, 0.001);
+    const lowBandActive = normLowRms >= Math.min(this.silenceThreshold * 0.35, 0.001);
+    const highBandActive = normHighRms >= Math.min(this.silenceThreshold * 0.35, 0.001);
 
     return { brightnessScore, lowBandActive, highBandActive };
   }
