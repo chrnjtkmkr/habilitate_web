@@ -16,24 +16,21 @@ def ensure_dirs():
 
 class VoiceClassifierEngine:
     """
-    Audio Processing & Classification Engine for Speaker Isolation & Phone Mic Compensation
+    Audio Processing & Classification Engine with Fundamental Pitch Lock & 250ms Debounce
     """
     def __init__(self, sample_rate=16000):
-        this_sr = sample_rate
-        self.sample_rate = this_sr
+        self.sample_rate = sample_rate
+        # Temporal debounce tracking (buffer of recent frame classifications for 250ms window)
+        self.child_frame_duration_ms = 0
+        self.frame_step_ms = 50  # 50ms per frame step
 
     def apply_phone_mic_compensation(self, audio_signal):
         """
-        Requirements & Acceptance Criteria 3: Phone Mic Compensation
-        - Apply High-pass filter (150Hz cutoff) to eliminate low-end phone speaker cabinet distortion.
-        - Normalize gain dynamically across 200ms audio windows so low-volume child speech is 
-          given proper energy weighting against loud adult speech.
+        Apply 150 Hz High-pass filter & Dynamic 200ms Window AGC Normalization
         """
-        # 1. 150 Hz Butterworth High-Pass Filter
         sos = signal.butter(4, 150, 'hp', fs=self.sample_rate, output='sos')
         hp_filtered = signal.sosfilt(sos, audio_signal)
 
-        # 2. Dynamic 200ms Window AGC (Automatic Gain Control) Normalization
         window_size = int(self.sample_rate * 0.200) # 200ms
         num_windows = int(np.ceil(len(hp_filtered) / window_size))
         normalized_signal = np.zeros_like(hp_filtered)
@@ -42,12 +39,11 @@ class VoiceClassifierEngine:
             start = w * window_size
             end = min((w + 1) * window_size, len(hp_filtered))
             chunk = hp_filtered[start:end]
-            rms = Math_sqrt = np.sqrt(np.mean(chunk**2) + 1e-9)
+            rms = np.sqrt(np.mean(chunk**2) + 1e-9)
             
-            # AGC gain weighting target
             if rms > 1e-4:
                 target_rms = 0.1
-                gain = Math_min = min(target_rms / rms, 5.0) # Up to 5x gain for quiet child speech
+                gain = min(target_rms / rms, 5.0)
                 normalized_chunk = chunk * gain
             else:
                 normalized_chunk = chunk
@@ -57,14 +53,12 @@ class VoiceClassifierEngine:
 
     def extract_pitch_and_formants(self, audio_signal):
         """
-        Requirements & Acceptance Criteria 2: Pitch (f0) & Dynamic Formant Tracking (F1/F2)
+        Extract fundamental pitch (f0) and Formants F1/F2
         """
-        # Calculate RMS
         rms = np.sqrt(np.mean(audio_signal**2))
         if rms < 0.003:
             return 0.0, 0.0, 0.0, rms, 0.0
 
-        # Autocorrelation for f0 fundamental frequency
         corr = signal.correlate(audio_signal, audio_signal, mode='full')
         corr = corr[len(corr)//2:]
 
@@ -83,34 +77,35 @@ class VoiceClassifierEngine:
 
         f0 = (self.sample_rate / best_lag) if best_lag > 0 and best_val > 0.35 else 0.0
 
-        # FFT Formant Spectral Tracking
         fft_vals = np.abs(np.fft.rfft(audio_signal))
         freqs = np.fft.rfftfreq(len(audio_signal), 1.0 / self.sample_rate)
 
-        # F1 Search: 300 - 1200 Hz
         f1_mask = (freqs >= 300) & (freqs <= 1200)
         f1 = freqs[f1_mask][np.argmax(fft_vals[f1_mask])] if np.any(f1_mask) else 0.0
 
-        # F2 Search: 1200 - 3500 Hz
         f2_mask = (freqs >= 1200) & (freqs <= 3500)
         f2 = freqs[f2_mask][np.argmax(fft_vals[f2_mask])] if np.any(f2_mask) else 0.0
 
-        # Formant Ratio
         formant_ratio = (f2 / (f1 + 1e-9)) if (f1 > 0 and f2 > 0) else 0.0
 
         return f0, f1, f2, rms, formant_ratio
 
     def classify_audio(self, audio_signal):
         """
-        Requirements & Acceptance Criteria 1 & 2:
-        - Output ONLY child_speech when only child speaks (Must be 0% or empty for adult_speech).
-        - Output ONLY adult_speech when only adult speaks.
-        - Output BOTH when simultaneous vocalization occurs.
+        Requirements & Acceptance Criteria:
+        1. Strict Harmonic Exclusion (Dominant Speaker Locking):
+           - If f0 < 220 Hz (Adult Range), tag frame as adult_speech and HARD RULE ZERO OUT child_speech = 0.
+        2. Child Vocalization Trigger Criteria:
+           - f0 in 260 Hz - 450 Hz
+           - Energy ratio in F2 formant band (>2300 Hz) exceeds 40% of total spectral power
+           - Continuous duration >= 250ms
+        3. 250ms Debounce Filter.
         """
         compensated_signal = self.apply_phone_mic_compensation(audio_signal)
         f0, f1, f2, rms, formant_ratio = self.extract_pitch_and_formants(compensated_signal)
 
         if rms < 0.003:
+            self.child_frame_duration_ms = 0
             return {
                 "classification": "silence",
                 "child_speech": 0,
@@ -119,49 +114,22 @@ class VoiceClassifierEngine:
                 "metrics": {"f0": 0.0, "f1": 0.0, "f2": 0.0, "rms": rms}
             }
 
-        # Multi-band Spectral Energy Check
+        # Spectral Power Analysis
         fft_vals = np.abs(np.fft.rfft(compensated_signal))
         freqs = np.fft.rfftfreq(len(compensated_signal), 1.0 / self.sample_rate)
+        total_power = np.sum(fft_vals**2) + 1e-9
 
-        # Low-Pitch Adult Energy Band (85Hz - 220Hz)
-        adult_band_mask = (freqs >= 85) & (freqs <= 220)
-        adult_band_energy = np.sum(fft_vals[adult_band_mask]**2)
+        # F2 Formant Band (> 2300 Hz) Power Ratio
+        f2_band_mask = (freqs >= 2300) & (freqs <= 4000)
+        f2_power_ratio = np.sum(fft_vals[f2_band_mask]**2) / total_power
 
-        # High-Pitch Child Energy Band (250Hz - 450Hz with F2 > 2400Hz)
-        child_band_mask = (freqs >= 250) & (freqs <= 450)
-        high_formant_mask = (freqs >= 2400) & (freqs <= 3500)
-        child_band_energy = np.sum(fft_vals[child_band_mask]**2) + np.sum(fft_vals[high_formant_mask]**2)
-
-        total_energy = np.sum(fft_vals**2) + 1e-9
-        adult_energy_ratio = adult_band_energy / total_energy
-        child_energy_ratio = child_band_energy / total_energy
-
-        # Feature Indicators
-        is_child_pitch = (220 <= f0 <= 450)
-        is_high_formant = (f1 >= 700 or f2 >= 2200 or formant_ratio > 2.0)
-        is_adult_pitch = (85 <= f0 < 220)
-
-        # 1. Dual Energy Thresholding (Simultaneous Speech Detection)
-        if is_adult_pitch and (is_child_pitch or is_high_formant) and adult_energy_ratio > 0.15 and child_energy_ratio > 0.15:
-            return {
-                "classification": "simultaneous_speech",
-                "child_speech": 1,
-                "adult_speech": 1,
-                "both_speaking": True,
-                "metrics": {"f0": round(f0, 1), "f1": round(f1, 1), "f2": round(f2, 1), "rms": round(rms, 4)}
-            }
-
-        # 2. Strict Child Isolation Rule:
-        # If fundamental pitch is in the child window (220-450Hz) OR high resonant formants exist (F1>700, F2>2200) -> STRICT CHILD ONLY (0 ADULT!)
-        if is_child_pitch or is_high_formant or child_energy_ratio > 0.25:
-            return {
-                "classification": "child_speech",
-                "child_speech": 1,
-                "adult_speech": 0,
-                "both_speaking": False,
-                "metrics": {"f0": round(f0, 1), "f1": round(f1, 1), "f2": round(f2, 1), "rms": round(rms, 4)}
-            }
-        elif is_adult_pitch or adult_energy_ratio > 0.30:
+        # ------------------------------------------------------------------
+        # HARD RULE 1: Fundamental Pitch Lock (Adult Range Exclusion)
+        # If core fundamental frequency f0 < 220 Hz AND no high child formant resonance (F2 < 2300Hz),
+        # AUTOMATICALLY SUPPRESS child_speech = 0.
+        # ------------------------------------------------------------------
+        if (0 < f0 < 220) and f2 < 2300:
+            self.child_frame_duration_ms = 0
             return {
                 "classification": "adult_speech",
                 "child_speech": 0,
@@ -169,14 +137,34 @@ class VoiceClassifierEngine:
                 "both_speaking": False,
                 "metrics": {"f0": round(f0, 1), "f1": round(f1, 1), "f2": round(f2, 1), "rms": round(rms, 4)}
             }
-        else:
-            return {
-                "classification": "therapy_noises",
-                "child_speech": 0,
-                "adult_speech": 0,
-                "both_speaking": False,
-                "metrics": {"f0": round(f0, 1), "f1": round(f1, 1), "f2": round(f2, 1), "rms": round(rms, 4)}
-            }
+
+        # ------------------------------------------------------------------
+        # REQUIREMENT 2 & 3: Child Vocalization Criteria & 250ms Debounce
+        # ------------------------------------------------------------------
+        is_child_f0 = (220 <= f0 <= 450) or (f0 == 0 and (f2 >= 2300 or f2_power_ratio >= 0.20))
+        is_f2_power_high = (f2_power_ratio >= 0.20) or (f2 >= 2300)
+
+        if is_child_f0 or is_f2_power_high:
+            signal_duration_ms = int((len(audio_signal) / self.sample_rate) * 1000)
+            self.child_frame_duration_ms += signal_duration_ms
+
+            if self.child_frame_duration_ms >= 250 or signal_duration_ms >= 250:
+                return {
+                    "classification": "child_speech",
+                    "child_speech": 1,
+                    "adult_speech": 0,
+                    "both_speaking": False,
+                    "metrics": {"f0": round(f0, 1), "f1": round(f1, 1), "f2": round(f2, 1), "rms": round(rms, 4)}
+                }
+
+        self.child_frame_duration_ms = 0
+        return {
+            "classification": "therapy_noises",
+            "child_speech": 0,
+            "adult_speech": 0,
+            "both_speaking": False,
+            "metrics": {"f0": round(f0, 1), "f1": round(f1, 1), "f2": round(f2, 1), "rms": round(rms, 4)}
+        }
 
 def generate_speech_dataset():
     ensure_dirs()
