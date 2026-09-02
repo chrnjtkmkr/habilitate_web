@@ -103,7 +103,7 @@ class VoiceClassifierEngine:
     def classify_audio(self, audio_signal):
         """
         Requirements & Acceptance Criteria 1 & 2:
-        - Output ONLY child_speech when only child speaks (0% adult).
+        - Output ONLY child_speech when only child speaks (Must be 0% or empty for adult_speech).
         - Output ONLY adult_speech when only adult speaks.
         - Output BOTH when simultaneous vocalization occurs.
         """
@@ -119,7 +119,7 @@ class VoiceClassifierEngine:
                 "metrics": {"f0": 0.0, "f1": 0.0, "f2": 0.0, "rms": rms}
             }
 
-        # Multi-band Spectral Energy Check (Low-pitch register vs High-pitch/High-formant register)
+        # Multi-band Spectral Energy Check
         fft_vals = np.abs(np.fft.rfft(compensated_signal))
         freqs = np.fft.rfftfreq(len(compensated_signal), 1.0 / self.sample_rate)
 
@@ -136,11 +136,13 @@ class VoiceClassifierEngine:
         adult_energy_ratio = adult_band_energy / total_energy
         child_energy_ratio = child_band_energy / total_energy
 
-        # 1. Dual Energy Thresholding (Simultaneous Speech Detection)
-        has_adult_register = (f0 >= 85 and f0 <= 220) or (adult_energy_ratio > 0.15)
-        has_child_register = ((f0 >= 250 and f0 <= 450) or (child_energy_ratio > 0.15)) and (f1 > 750 or f2 > 2400)
+        # Feature Indicators
+        is_child_pitch = (220 <= f0 <= 450)
+        is_high_formant = (f1 >= 700 or f2 >= 2200 or formant_ratio > 2.0)
+        is_adult_pitch = (85 <= f0 < 220)
 
-        if has_adult_register and has_child_register and (adult_energy_ratio > 0.12 and child_energy_ratio > 0.12):
+        # 1. Dual Energy Thresholding (Simultaneous Speech Detection)
+        if is_adult_pitch and (is_child_pitch or is_high_formant) and adult_energy_ratio > 0.15 and child_energy_ratio > 0.15:
             return {
                 "classification": "simultaneous_speech",
                 "child_speech": 1,
@@ -149,10 +151,9 @@ class VoiceClassifierEngine:
                 "metrics": {"f0": round(f0, 1), "f1": round(f1, 1), "f2": round(f2, 1), "rms": round(rms, 4)}
             }
 
-        # 2. Single Speaker Strict Isolation
-        # Priority on High Resonant Formants (F1 > 750 Hz and F2 > 2400 Hz) & Child Pitch Window (250 Hz - 450 Hz)
-        if (250 <= f0 <= 450) or (f1 > 750 and f2 > 2400) or (child_energy_ratio > 0.25 and f0 > 200):
-            # Strict isolation: 0% for adult speech when child speaks
+        # 2. Strict Child Isolation Rule:
+        # If fundamental pitch is in the child window (220-450Hz) OR high resonant formants exist (F1>700, F2>2200) -> STRICT CHILD ONLY (0 ADULT!)
+        if is_child_pitch or is_high_formant or child_energy_ratio > 0.25:
             return {
                 "classification": "child_speech",
                 "child_speech": 1,
@@ -160,7 +161,7 @@ class VoiceClassifierEngine:
                 "both_speaking": False,
                 "metrics": {"f0": round(f0, 1), "f1": round(f1, 1), "f2": round(f2, 1), "rms": round(rms, 4)}
             }
-        elif (85 <= f0 <= 220) or (adult_energy_ratio > 0.25 and f0 < 230):
+        elif is_adult_pitch or adult_energy_ratio > 0.30:
             return {
                 "classification": "adult_speech",
                 "child_speech": 0,
