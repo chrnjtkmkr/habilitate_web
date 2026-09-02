@@ -509,21 +509,12 @@ export default function SessionRun() {
   async function handleRecordTrial(response: TrialResponse) {
     if (isPaused || !currentActivity || trialPending) return;
     const saId = currentActivity.id;
-    // Current single active trial selection for this activity
+    // Read from ref to get the latest counts (avoids stale closure on rapid taps)
     const currentCounts = trialCountsRef.current[saId] ?? { responded: 0, partial: 0, no_response: 0, refused: 0 };
-    
-    // Check if the exact same response is already selected; if so, skip (debounced / no-op)
-    if (currentCounts[response] === 1) return;
+    const trialNumber = Object.values(currentCounts).reduce((a, b) => a + b, 0) + 1;
+    const updatedCounts = { ...currentCounts, [response]: currentCounts[response] + 1 };
 
-    // Single active selection state per step/trial: set only the selected response to 1, others to 0
-    const updatedCounts: Record<string, number> = {
-      responded: response === 'responded' ? 1 : 0,
-      partial: response === 'partial' ? 1 : 0,
-      no_response: response === 'no_response' ? 1 : 0,
-      refused: response === 'refused' ? 1 : 0,
-    };
-
-    // Optimistic update — write discrete single-selection state to state and ref
+    // Optimistic update — write to both state and ref immediately
     setTrialCounts((prev) => ({ ...prev, [saId]: updatedCounts }));
     trialCountsRef.current = { ...trialCountsRef.current, [saId]: updatedCounts };
     setTrialPending(true);
@@ -532,7 +523,7 @@ export default function SessionRun() {
       await createTrial.mutateAsync({
         sessionActivityId: saId,
         response,
-        trialNumber: 1, // Single active selection per trial step
+        trialNumber,
       });
     } catch (err) {
       // 409 = duplicate insert that already succeeded — treat as success
@@ -1237,12 +1228,11 @@ export default function SessionRun() {
           <div className="shrink-0 p-3 lg:p-4" style={S.card}>
             {/* Counter strip — compact on narrow */}
             <p className="text-[12px] mb-1.5 lg:text-[14px] lg:mb-2" style={{ fontFeatureSettings: '"tnum"' }}>
-              <span style={S.text3}>Step Response: </span>
-              {counts.responded > 0 && <span className="font-bold ml-1" style={{ color: '#1A6B4F' }}>✓ Responded</span>}
-              {counts.partial > 0 && <span className="font-bold ml-1" style={{ color: '#92600A' }}>⚠ Partial</span>}
-              {counts.no_response > 0 && <span className="font-bold ml-1" style={{ color: '#5E5E7A' }}>✗ No Response</span>}
-              {counts.refused > 0 && <span className="font-bold ml-1" style={{ color: '#A83246' }}>⊘ Refused</span>}
-              {totalTrials === 0 && <span className="font-medium italic ml-1" style={S.text3}>Select a response for this step</span>}
+              <span style={S.text3}>T</span><span className="font-bold" style={S.text1}>{totalTrials + 1}</span>
+              <span style={S.text3}> ✓</span><span className="font-bold" style={{ color: '#1A6B4F' }}>{counts.responded}</span>
+              <span style={S.text3}> ⚠</span><span className="font-bold" style={{ color: '#92600A' }}>{counts.partial}</span>
+              <span style={S.text3}> ✗</span><span className="font-bold" style={{ color: '#5E5E7A' }}>{counts.no_response}</span>
+              <span style={S.text3}> ⊘</span><span className="font-bold" style={{ color: '#A83246' }}>{counts.refused}</span>
             </p>
 
             {/* Inline toast for response recorded */}
@@ -1276,36 +1266,22 @@ export default function SessionRun() {
               </button>
             </div>
 
-            {/* Response buttons — 2x2 on narrow, 4-across on lg+ with visual active selection */}
+            {/* Response buttons — 2x2 on narrow, 4-across on lg+ */}
             <div className="grid grid-cols-2 gap-2 sm:grid-cols-4 sm:gap-3">
               {([
-                { r: 'responded' as TrialResponse, icon: '✓', label: 'trial_responded', bg: '#E8F5F0', color: '#1A6B4F', border: '#1A6B4F' },
-                { r: 'partial' as TrialResponse, icon: '⚠', label: 'trial_partial', bg: '#FEF3E2', color: '#92600A', border: '#92600A' },
-                { r: 'no_response' as TrialResponse, icon: '✗', label: 'trial_no_response', bg: '#F4F4F8', color: '#5E5E7A', border: '#5E5E7A' },
-                { r: 'refused' as TrialResponse, icon: '⊘', label: 'trial_refused', bg: '#FCEEF0', color: '#A83246', border: '#A83246' },
-              ]).map((b) => {
-                const isSelected = counts[b.r] === 1;
-                return (
-                  <button key={b.r} onClick={() => handleRecordTrialWrapped(b.r)}
-                    disabled={isPaused || trialPending}
-                    className={`relative flex items-center justify-center gap-1.5 rounded-xl text-[13px] font-semibold transition-all duration-150 sm:gap-2 sm:text-[15px] ${isPaused || trialPending ? 'opacity-40 cursor-not-allowed' : 'active:scale-95 active:brightness-90'} ${isSelected ? 'ring-2 ring-offset-1' : ''}`}
-                    style={{
-                      height: 48,
-                      backgroundColor: b.bg,
-                      color: b.color,
-                      boxShadow: isSelected ? `0 0 0 2px ${b.border}` : 'none',
-                      fontWeight: isSelected ? 700 : 600,
-                    }}>
-                    <span className="text-[16px] sm:text-[18px]">{b.icon}</span>
-                    {t(b.label)}
-                    {isSelected && (
-                      <span className="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full text-[10px] text-white" style={{ backgroundColor: b.color }}>
-                        ✓
-                      </span>
-                    )}
-                  </button>
-                );
-              })}
+                { r: 'responded' as TrialResponse, icon: '✓', label: 'trial_responded', bg: '#E8F5F0', color: '#1A6B4F' },
+                { r: 'partial' as TrialResponse, icon: '⚠', label: 'trial_partial', bg: '#FEF3E2', color: '#92600A' },
+                { r: 'no_response' as TrialResponse, icon: '✗', label: 'trial_no_response', bg: '#F4F4F8', color: '#5E5E7A' },
+                { r: 'refused' as TrialResponse, icon: '⊘', label: 'trial_refused', bg: '#FCEEF0', color: '#A83246' },
+              ]).map((b) => (
+                <button key={b.r} onClick={() => handleRecordTrialWrapped(b.r)}
+                  disabled={isPaused || trialPending}
+                  className={`flex items-center justify-center gap-1.5 rounded-xl text-[13px] font-semibold transition-all duration-150 sm:gap-2 sm:text-[15px] ${isPaused || trialPending ? 'opacity-40 cursor-not-allowed' : 'active:scale-95 active:brightness-90'}`}
+                  style={{ height: 48, backgroundColor: b.bg, color: b.color }}>
+                  <span className="text-[16px] sm:text-[18px]">{b.icon}</span>
+                  {t(b.label)}
+                </button>
+              ))}
             </div>
 
             {/* Nav row — wrap on narrow */}
