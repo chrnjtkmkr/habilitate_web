@@ -245,16 +245,16 @@ export class PitchDetector {
 
     let energyBox1 = 0; // 300 - 1000 Hz
     let energyBox2 = 0; // 2000 - 4000 Hz
-    let energyLowBand = 0; // 85 - 200 Hz (High-pass filtered at 180 Hz)
-    let energyHighBand = 0; // 240 - 450 Hz
+    let energyLowBand = 0; // 85 - 220 Hz (High-pass filtered at 150 Hz)
+    let energyHighBand = 0; // >= 220 Hz
     let energyFormantF1 = 0; // 750 - 1200 Hz
-    let energyFormantF2 = 0; // 2300 - 3500 Hz
+    let energyFormantF2 = 0; // 2400 - 3500 Hz
 
     for (let k = 0; k < halfN; k++) {
       const freq = (k * this.sampleRate) / N;
 
-      // Phone Mic Compensation: Steep High-Pass Filter at 180 Hz (eliminates phone cabinet resonance)
-      if (freq < 180) continue;
+      // Phone Mic Compensation: High-Pass Filter at 150 Hz to strip low-end speaker cabinet resonance
+      if (freq < 150) continue;
 
       const magSq = fftResult.real[k] * fftResult.real[k] + fftResult.imag[k] * fftResult.imag[k];
 
@@ -264,22 +264,22 @@ export class PitchDetector {
       if (freq >= 2000 && freq <= 4000) {
         energyBox2 += magSq;
       }
-      if (freq >= 180 && freq <= 200) {
+      if (freq >= 150 && freq <= 220) {
         energyLowBand += magSq;
       }
-      if (freq >= 240 && freq <= 450) {
+      if (freq >= 220 && freq <= 4000) {
         energyHighBand += magSq;
       }
       if (freq >= 750 && freq <= 1200) {
         energyFormantF1 += magSq;
       }
-      if (freq >= 2300 && freq <= 3500) {
+      if (freq >= 2400 && freq <= 3500) {
         energyFormantF2 += magSq;
       }
     }
 
     const brightnessScore = energyBox2 / (energyBox1 + 1e-9);
-    const hasHighFormants = energyFormantF2 > 1e-7;
+    const hasHighFormants = energyFormantF1 > 1e-7 && energyFormantF2 > 1e-7;
 
     // Parseval normalized RMS per band
     const normLowRms = Math.sqrt(energyLowBand) / N;
