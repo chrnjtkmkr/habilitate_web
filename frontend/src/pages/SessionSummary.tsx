@@ -19,7 +19,7 @@ import TrialDonut from '../components/charts/TrialDonut';
 import VoiceDiarizationCard from '../components/charts/VoiceDiarizationCard';
 import PromptLevelCard from '../components/charts/PromptLevelCard';
 import TrialInferenceRow from '../components/charts/TrialInferenceRow';
-import ProbeReviewCard from '../components/ProbeReviewCard';
+
 import { getReadableActivityName } from '../lib/activity/readableName';
 import { batchInferTrialsForSession } from '../lib/inference/batchProcessor';
 import { deriveSessionProbes } from '../lib/derivation/deriveSessionProbes';
@@ -551,10 +551,7 @@ export default function SessionSummary() {
           </div>
         )}
 
-        {/* REGION 7b — Probe Review: Response to Name */}
-        {session.child && (
-          <ProbeReviewCard sessionId={sessionId!} childId={session.child.id} />
-        )}
+
 
         {/* REGION 8 — Finalize (only if not already finalized) */}
         {!isFinalized && (

@@ -89,8 +89,13 @@ export function useInsertManualProbe(sessionId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async (probe: Omit<ProbeInsert, 'id' | 'created_at'>) => {
-      const { error } = await supabase.from('probes').insert(probe);
+      const { data, error } = await supabase
+        .from('probes')
+        .insert(probe)
+        .select('id, captured_at, raw, score, valid, therapist_confirmed, method, attribute_id, child_id, session_id')
+        .single();
       if (error) throw error;
+      return data;
     },
     // No retry on auth/RLS errors — log once and stop
     retry: false,

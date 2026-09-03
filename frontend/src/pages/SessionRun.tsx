@@ -21,6 +21,7 @@ import type { CVMetrics } from '../cv/CVPipeline';
 import { ResponseToNameDetector } from '../cv/ResponseToNameDetector';
 import type { RTNCandidate } from '../cv/ResponseToNameDetector';
 import CVCanvas from '../components/session/CVCanvas';
+import RTNConfirmModal from '../components/session/RTNConfirmModal';
 import { CVAdapter, computeCompositeScore } from '../lib/measurement/cvAdapter';
 import { useAttributeConfig, useChildPersonalBests } from '../lib/queries/attributes';
 import { useInsertManualProbe } from '../lib/queries/probes';
@@ -133,6 +134,11 @@ export default function SessionRun() {
   useEffect(() => { childIdRef.current = session?.child?.id; }, [session?.child?.id]);
   const sessionIdRef = useRef(sessionId);
   useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
+
+  // RTN confirmation queue — each entry is a pending probe waiting for therapist review
+  const [rtnQueue, setRtnQueue] = useState<Array<{ probeId: string; capturedAt: string; looked: boolean }>>([]);
+  const rtnQueueRef = useRef(rtnQueue);
+  useEffect(() => { rtnQueueRef.current = rtnQueue; }, [rtnQueue]);
 
   // Instantiate RTN detector when config loads
   useEffect(() => {
@@ -297,7 +303,9 @@ export default function SessionRun() {
           if (detector && cId && sId) {
             const candidate: RTNCandidate | null = detector.tick(m);
             if (candidate) {
-              insertProbeRef.current.mutate({
+              // Use mutateAsync so we can capture the probe ID and push it into
+              // the real-time confirmation queue shown as a modal overlay.
+              insertProbeRef.current.mutateAsync({
                 session_id: sId,
                 child_id: cId,
                 attribute_id: 'response_to_name',
@@ -312,6 +320,16 @@ export default function SessionRun() {
                   detection: 'plausible_moment',
                 },
                 score: candidate.looked ? 1 : 0,
+              }).then((probe) => {
+                // probe is the inserted row returned from Supabase
+                if (probe && probe.id) {
+                  setRtnQueue((prev) => [
+                    ...prev,
+                    { probeId: probe.id, capturedAt: candidate.capturedAt, looked: candidate.looked },
+                  ]);
+                }
+              }).catch(() => {
+                // Insert failed — logged by the mutation's onError handler; don't block the session
               });
             }
           }
@@ -1535,6 +1553,21 @@ export default function SessionRun() {
           </div>
         </div>
       )}
+
+      {/* RTN real-time confirmation modal — shown over the live session as each detection fires */}
+      {rtnQueue.length > 0 && sessionId && (() => {
+        const pending = rtnQueue[0];
+        return (
+          <RTNConfirmModal
+            key={pending.probeId}
+            sessionId={sessionId}
+            probeId={pending.probeId}
+            capturedAt={pending.capturedAt}
+            looked={pending.looked}
+            onDone={() => setRtnQueue((prev) => prev.slice(1))}
+          />
+        );
+      })()}
 
       {/* End session confirmation */}
       <Modal open={endConfirmOpen} onClose={() => setEndConfirmOpen(false)} title={t('end_session_confirm')}>
