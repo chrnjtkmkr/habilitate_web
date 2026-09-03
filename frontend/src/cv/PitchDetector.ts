@@ -169,7 +169,7 @@ export class PitchDetector {
     }
 
     // 5. Classification Logic with Upgraded Acoustic Filtering & Adaptive Brightness (V >= 0.32)
-    let rawState: PitchResult['classification'] = 'silence';
+    let rawState: PitchResult['classification'];
 
     if (confidence < this.minConfidence || isTransientImpulse) {
       rawState = 'noise';

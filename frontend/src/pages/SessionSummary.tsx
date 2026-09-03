@@ -445,6 +445,8 @@ export default function SessionSummary() {
           </div>
         </div>
 
+
+
         {/* REGION 6 — Activities List */}
         <div>
           <p style={S.label} className="mb-3">{t('activities_for_session')}</p>

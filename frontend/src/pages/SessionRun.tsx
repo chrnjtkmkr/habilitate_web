@@ -17,14 +17,9 @@ import { useCreateSessionEvent } from '../lib/queries/sessionEvents';
 import { useRecommendPlan, useAcceptPlan } from '../lib/queries/planRecommender';
 import { useToast } from '../lib/toastStore';
 import { CVPipeline } from '../cv/CVPipeline';
-import type { CVMetrics } from '../cv/CVPipeline';
-import { ResponseToNameDetector } from '../cv/ResponseToNameDetector';
-import type { RTNCandidate } from '../cv/ResponseToNameDetector';
 import CVCanvas from '../components/session/CVCanvas';
-import RTNConfirmModal from '../components/session/RTNConfirmModal';
 import { CVAdapter, computeCompositeScore } from '../lib/measurement/cvAdapter';
 import { useAttributeConfig, useChildPersonalBests } from '../lib/queries/attributes';
-import { useInsertManualProbe } from '../lib/queries/probes';
 import { domainI18nKeys } from '../lib/domainLabels';
 import { getDomainIcon, getSimplifiedGoal, getHelpLadder, pickField, pickArrayField, formatAgeRange } from '../lib/activity/content';
 import { useActivityLookup } from '../lib/queries/activities';
@@ -117,42 +112,11 @@ export default function SessionRun() {
   const engagementSamplesRef = useRef<{ time: number; score: number }[]>([]);
   const startTimeRef = useRef(0);
 
-  // Response-to-name detection
-  const { data: rtnConfig } = useAttributeConfig('response_to_name');
   // Personal best detection — gaze only
   const { data: gazeConfig } = useAttributeConfig('looks_at_you');
   const { data: childBests } = useChildPersonalBests(session?.child?.id);
   const [gazeBestNotice, setGazeBestNotice] = useState(false);
   const gazeBestFiredRef = useRef(false); // once per activity
-  const rtnDetectorRef = useRef<ResponseToNameDetector | null>(null);
-  const insertProbe = useInsertManualProbe(sessionId);
-
-  // Stable refs for RTN probe writes (avoids stale closures in CV callback)
-  const insertProbeRef = useRef(insertProbe);
-  useEffect(() => { insertProbeRef.current = insertProbe; }, [insertProbe]);
-  const childIdRef = useRef(session?.child?.id);
-  useEffect(() => { childIdRef.current = session?.child?.id; }, [session?.child?.id]);
-  const sessionIdRef = useRef(sessionId);
-  useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
-
-  // RTN confirmation queue — each entry is a pending probe waiting for therapist review
-  const [rtnQueue, setRtnQueue] = useState<Array<{ probeId: string; capturedAt: string; looked: boolean }>>([]);
-  const rtnQueueRef = useRef(rtnQueue);
-  useEffect(() => { rtnQueueRef.current = rtnQueue; }, [rtnQueue]);
-
-  // Instantiate RTN detector when config loads
-  useEffect(() => {
-    if (!rtnConfig) return;
-    const cfg = rtnConfig as Record<string, unknown>;
-    const detector = new ResponseToNameDetector({
-      windowMs: typeof cfg.window_ms === 'number' ? cfg.window_ms : 3000,
-      validAngleDeg: typeof cfg.valid_angle_deg === 'number' ? cfg.valid_angle_deg : 30,
-      debug: import.meta.env.DEV,
-    });
-    rtnDetectorRef.current = detector;
-    if (import.meta.env.DEV) console.log('[RTN-diag] detector CREATED | config:', cfg);
-    return () => { rtnDetectorRef.current = null; };
-  }, [rtnConfig]);
 
   const sessionDuration = session?.duration_minutes ?? 45;
   const { data: recommendedPlan, isLoading: planLoading } = useRecommendPlan(
@@ -196,7 +160,6 @@ export default function SessionRun() {
   const lastTrialTimeRef = useRef(0);
   const lastSpontTimeRef = useRef(0);
   const prevChildSoundsRef = useRef(0);
-  const [lastTrialResponse, setLastTrialResponse] = useState<string | null>(null);
 
   const endActivityMut = useEndSessionActivity();
   const startActivityMut = useStartSessionActivity();
@@ -295,44 +258,6 @@ export default function SessionRun() {
           const score = computeCompositeScore(m, sessionMin);
           setCompositeScore(score);
           engagementSamplesRef.current.push({ time: Date.now(), score });
-
-          // Response-to-name detection
-          const detector = rtnDetectorRef.current;
-          const cId = childIdRef.current;
-          const sId = sessionIdRef.current;
-          if (detector && cId && sId) {
-            const candidate: RTNCandidate | null = detector.tick(m);
-            if (candidate) {
-              // Use mutateAsync so we can capture the probe ID and push it into
-              // the real-time confirmation queue shown as a modal overlay.
-              insertProbeRef.current.mutateAsync({
-                session_id: sId,
-                child_id: cId,
-                attribute_id: 'response_to_name',
-                method: 'system_auto',
-                therapist_confirmed: false,
-                valid: true,
-                captured_at: candidate.capturedAt,
-                raw: {
-                  latency_ms: candidate.latencyMs,
-                  orientation: candidate.looked ? 'looked' : 'did_not_look',
-                  target: 'therapist',
-                  detection: 'plausible_moment',
-                },
-                score: candidate.looked ? 1 : 0,
-              }).then((probe) => {
-                // probe is the inserted row returned from Supabase
-                if (probe && probe.id) {
-                  setRtnQueue((prev) => [
-                    ...prev,
-                    { probeId: probe.id, capturedAt: candidate.capturedAt, looked: candidate.looked },
-                  ]);
-                }
-              }).catch(() => {
-                // Insert failed — logged by the mutation's onError handler; don't block the session
-              });
-            }
-          }
         }
       }, audioContextRef.current ?? undefined);
       setCvStatus(status);
@@ -1402,7 +1327,6 @@ export default function SessionRun() {
                   <p className="text-white text-sm">Camera not available</p>
                 </div>
               )}
-              {/* Video is mirrored (selfie); flip arrow for display */}
               {pointingActive && (
                 <div className="absolute top-2 left-1/2 -translate-x-1/2 rounded-full px-3 py-1 text-white text-[16px] font-bold" style={{ backgroundColor: 'rgba(91,91,240,0.6)' }}>
                   {displayH === 'left' ? '←' : '→'}
@@ -1411,6 +1335,7 @@ export default function SessionRun() {
             </div>
             <p className="mt-2 text-[13px]"><span style={S.text3}>Status: </span><span className="font-medium" style={{ color: faceColor }}>{faceLabel}</span></p>
           </div>
+
 
           {/* Card 2: Social Gaze */}
           <div style={S.card} className="p-4 shrink-0">
@@ -1517,6 +1442,7 @@ export default function SessionRun() {
         </div>
       )}
 
+
       {/* PAUSED overlay banner */}
       {isPaused && (
         <div className="fixed inset-x-0 top-[52px] z-30 flex items-center justify-center gap-3 py-2" style={{ backgroundColor: '#A5A5F0' }}>
@@ -1553,21 +1479,6 @@ export default function SessionRun() {
           </div>
         </div>
       )}
-
-      {/* RTN real-time confirmation modal — shown over the live session as each detection fires */}
-      {rtnQueue.length > 0 && sessionId && (() => {
-        const pending = rtnQueue[0];
-        return (
-          <RTNConfirmModal
-            key={pending.probeId}
-            sessionId={sessionId}
-            probeId={pending.probeId}
-            capturedAt={pending.capturedAt}
-            looked={pending.looked}
-            onDone={() => setRtnQueue((prev) => prev.slice(1))}
-          />
-        );
-      })()}
 
       {/* End session confirmation */}
       <Modal open={endConfirmOpen} onClose={() => setEndConfirmOpen(false)} title={t('end_session_confirm')}>

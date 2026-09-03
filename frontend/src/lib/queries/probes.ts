@@ -88,7 +88,7 @@ export function useProbesForDateRange(
 export function useInsertManualProbe(sessionId: string | undefined) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: async (probe: Omit<ProbeInsert, 'id' | 'created_at'>) => {
+    mutationFn: async (probe: Omit<ProbeInsert, 'created_at'> & { id?: string }) => {
       const { data, error } = await supabase
         .from('probes')
         .insert(probe)

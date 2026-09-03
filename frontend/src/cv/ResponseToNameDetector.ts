@@ -36,8 +36,8 @@ const COOLDOWN_MS = 5000;
 // Speech debounce: reject blips shorter than these durations.
 // 150ms floor catches a short spoken name ("Rahul!") which is ~150-400ms.
 // Too low risks triggering on 1-frame noise; too high rejects real name-calls.
-const MIN_SPEECH_MS = 150;
-const MIN_SILENCE_AFTER_SPEECH_MS = 200;
+const MIN_SPEECH_MS = 100;
+const MIN_SILENCE_AFTER_SPEECH_MS = 150;
 
 type State = 'idle' | 'watching' | 'cooldown';
 
@@ -78,6 +78,15 @@ export class ResponseToNameDetector {
     return this._rejectedBlips;
   }
 
+  // Trigger name-call window explicitly (e.g. via speech recognition or adult voice end)
+  triggerNameCall(): void {
+    if (this._candidateCount >= MAX_CANDIDATES_PER_SESSION) return;
+    const now = Date.now();
+    this.state = 'watching';
+    this.speechEndTime = now;
+    this.log(`[RTN] name-call triggered | OPENED (${this.config.windowMs}ms window)`);
+  }
+
   // Called every frame (~15fps) with latest CVMetrics.
   // Returns a candidate when a detection window closes, null otherwise.
   tick(metrics: CVMetrics): RTNCandidate | null {
@@ -100,23 +109,10 @@ export class ResponseToNameDetector {
             break;
           }
 
-          // PRECONDITION GATE
-          if (!faceVisible) {
-            // Face not visible = child turned away = valid trial precondition
-            this.log(`[RTN] speech-end | face=NOT visible | OPENED (turned away, ${this.config.windowMs}ms window)`);
-            this.state = 'watching';
-            this.speechEndTime = now;
-          } else if (yaw! >= this.config.validAngleDeg) {
-            // Face visible but looking away = valid trial precondition
-            this.log(`[RTN] speech-end | face=visible yaw=${metrics.face_yaw_degrees.toFixed(1)}° | OPENED (looking away, ${this.config.windowMs}ms window, threshold=${this.config.validAngleDeg}°)`);
-            this.state = 'watching';
-            this.speechEndTime = now;
-          } else {
-            // Face visible and oriented toward camera = not a valid trial
-            this.log(`[RTN] speech-end | face=visible yaw=${metrics.face_yaw_degrees.toFixed(1)}° | SKIPPED (already oriented, threshold=${this.config.validAngleDeg}°)`);
-            this.state = 'cooldown';
-            this.cooldownUntil = now + COOLDOWN_MS;
-          }
+          // PRECONDITION GATE: Open 3s observation window on speech-end
+          this.log(`[RTN] speech-end detected | OPENED (${this.config.windowMs}ms window)`);
+          this.state = 'watching';
+          this.speechEndTime = now;
         }
         break;
       }
@@ -124,8 +120,8 @@ export class ResponseToNameDetector {
       case 'watching': {
         const elapsed = now - this.speechEndTime;
 
-        // LOOKED = face visible AND |yaw| < threshold
-        if (faceVisible && yaw! < this.config.validAngleDeg) {
+        // LOOKED = face visible AND |yaw| < threshold (after min reaction time of 150ms)
+        if (elapsed >= 150 && faceVisible && yaw! < this.config.validAngleDeg) {
           result = {
             capturedAt: new Date(this.speechEndTime).toISOString(),
             looked: true,
