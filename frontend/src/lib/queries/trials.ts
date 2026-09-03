@@ -1,4 +1,4 @@
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+  import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '../supabase';
 import type { Database } from '../../types/supabase';
 
@@ -49,13 +49,16 @@ export function useCreateTrial() {
     }) => {
       const { data, error } = await supabase
         .from('trials')
-        .insert({
-          session_activity_id: sessionActivityId,
-          response,
-          trial_number: trialNumber,
-          prompt_level: promptLevel ?? null,
-          recorded_at: new Date().toISOString(),
-        })
+        .upsert(
+          {
+            session_activity_id: sessionActivityId,
+            response,
+            trial_number: trialNumber,
+            prompt_level: promptLevel ?? null,
+            recorded_at: new Date().toISOString(),
+          },
+          { onConflict: 'session_activity_id,trial_number', ignoreDuplicates: false },
+        )
         .select('id')
         .maybeSingle();
       if (error) throw error;
