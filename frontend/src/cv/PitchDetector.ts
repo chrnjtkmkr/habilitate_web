@@ -1,402 +1,365 @@
 /**
- * PitchDetector — real-time fundamental frequency (F0) extraction,
- * acoustic brightness scoring, pitch stability tracking, and voice classification.
+ * PitchDetector — Production-grade real-time voice classification engine.
  *
- * Upgraded Acoustic Filtering & Transient Suppression:
- * 1. High-Pass Filter (85 Hz Cutoff) & Transient Attack Detector:
- *    - Strips low-end thuds (knocks, chair punches, furniture thuds).
- *    - Instantaneous energy jumps (> 20dB in < 30ms) flag transient noise impulse and trigger a 2-frame cooldown.
- * 2. Adaptive Brightness Thresholding for Child Voice:
- *    - Pitch bounds: 250 Hz <= F0 <= 420 Hz.
- *    - Brightness threshold: V >= 0.32 (optimized for phone speaker playback acoustic roll-off).
- * 3. Envelope-Based Micro-Pause Tolerance:
- *    - Allows up to 100ms (2 frames) micro-pauses between child words within sentences.
+ * Signal chain (per 50 ms frame):
+ *   Float32Array[2048] PCM  (from AnalyserNode.getFloatTimeDomainData)
+ *   → RMS gate                  ignore frames below -40 dBFS
+ *   → Crest factor gate         reject sharp impulsive transients (knocks, taps, claps)
+ *   → Hann window               spectral leakage prevention
+ *   → Radix-2 FFT               frequency-domain analysis
+ *   → spectral energy ratio     brightness = E(>2500 Hz) / total energy
+ *   → Normalized autocorrelation F0   80–600 Hz search
+ *   → Harmonicity (HNR) gate    reject non-tonal / percussive content
+ *   → Strict decision tree      adult_voice / child_voice
  */
 
 export interface PitchResult {
   frequency: number;
   confidence: number;
   rmsLevel: number;
-  classification: 'child_voice' | 'adult_voice' | 'silence' | 'noise';
+  classification:
+    | 'child_voice'
+    | 'adult_voice'
+    | 'adult_male'
+    | 'adult_female'
+    | 'child_speaking'
+    | 'adult_speaking'
+    | 'both_speaking'
+    | 'silence'
+    | 'noise'
+    | 'background_noise'
+    | 'noise_whistle'
+    | 'synthetic_tone_or_whistle'
+    | 'no_pitch_detected';
   brightnessScore?: number;
   isStable?: boolean;
+  /** Spectral Flatness Measure 0–1 (0 = tonal, 1 = white noise) */
+  sfm?: number;
+  spectralCentroid?: number;
+  zcr?: number;
+  /** Peak/RMS ratio in dB. High values indicate a sharp transient (knock/tap/clap). */
+  crestFactorDb?: number;
+  /** Harmonics-to-noise ratio in dB, derived from the normalized autocorrelation peak. */
+  hnrDb?: number;
 }
 
+// ─── PitchDetector ─────────────────────────────────────────────────────────
+
 export class PitchDetector {
+  static readonly BRIGHTNESS_THRESHOLD = 0.05;
+  private static readonly MIN_FREQUENCY_HZ = 80;
+  private static readonly MAX_FREQUENCY_HZ = 600;
+  /** Minimum harmonics-to-noise ratio (dB) required to treat a frame as voiced.
+   *  Below this, content is non-tonal (percussive noise, taps, claps) and is
+   *  discarded as background_noise rather than classified as speech. */
+  private static readonly MIN_HNR_DB = 5;
+  /** Maximum peak/RMS ratio (dB) allowed before a frame is treated as an
+   *  impulsive transient (knock/tap/clap) rather than sustained voiced speech.
+   *  Starting value — validate against real knock/tap samples and tune. */
+  private static readonly MAX_CREST_FACTOR_DB = 20;
+
   private sampleRate: number;
-  private silenceThreshold: number = 0.003; // Lowered floor (-50dB approx)
-  private minConfidence: number = 0.40; // HNR / Voice Clarity Gate
+  /** -40 dBFS expressed as linear RMS. */
+  private readonly rmsFloor = Math.pow(10, -40 / 20);
+
+  // TTS suppression
   private lastSpeechEndTime: number | null = null;
   private wasSpeaking: boolean = false;
 
-  // Transient attack detection
-  private prevRms: number = 0;
-  private transientCooldown: number = 0;
+  // Hann window coefficient cache
+  private hannCoeffs: Float32Array | null = null;
+  private hannN: number = 0;
 
-  // 3-frame (150ms) persistence & micro-pause buffer
-  private frameHistory: PitchResult['classification'][] = [];
-  private stableState: PitchResult['classification'] = 'silence';
-  private microPauseCount: number = 0;
-
-  // 3-frame pitch stability buffer
-  private pitchHistory: number[] = [];
-
-  // Throttled console logging telemetry
-  private lastLogTime: number = 0;
+  private debugLogging = false;
 
   constructor(sampleRate: number = 44100) {
     this.sampleRate = sampleRate;
   }
 
-  detectPitch(audioData: Float32Array): PitchResult {
-    const silenceResult: PitchResult = {
-      frequency: 0,
-      confidence: 0,
-      rmsLevel: 0,
-      classification: this.updatePersistence('silence'),
-      brightnessScore: 0,
-      isStable: false,
-    };
+  setDebugLogging(enabled: boolean): void {
+    this.debugLogging = enabled;
+  }
 
-    // Check browser's speech synthesis directly — no callbacks, no flags
+  detectPitch(audioData: Float32Array): PitchResult {
+    const N = audioData.length;
+
+    const emit = (
+      cls: PitchResult['classification'],
+      rms = 0, freq = 0, conf = 0,
+      brightness = 0, sfm = 0,
+      centroid = 0, zcr = 0,
+      crestFactorDb = 0, hnrDb = 0
+    ): PitchResult => ({
+      frequency: freq,
+      confidence: conf,
+      rmsLevel: rms,
+      classification: this.updatePersistence(cls),
+      brightnessScore: brightness,
+      sfm,
+      spectralCentroid: centroid,
+      zcr,
+      crestFactorDb,
+      hnrDb
+    });
+
+    // ── TTS guard ─────────────────────────────────────────────────────────
     const synth = typeof window !== 'undefined' ? window.speechSynthesis : null;
     if (synth && (synth.speaking || synth.pending)) {
       this.wasSpeaking = true;
-      this.pitchHistory = [];
-      this.prevRms = 0;
-      return silenceResult;
+      return emit('silence');
     }
-
-    // Track when speech stops for the cooldown
     if (synth && !synth.speaking && !synth.pending && this.wasSpeaking) {
       this.lastSpeechEndTime = Date.now();
       this.wasSpeaking = false;
     }
-
-    // 1-second cooldown after speech ends to cover gaps between EN->HI->tip
     if (this.lastSpeechEndTime && Date.now() - this.lastSpeechEndTime < 1000) {
-      this.pitchHistory = [];
-      this.prevRms = 0;
-      return silenceResult;
+      return emit('silence');
     }
 
-    // 1. Calculate RMS
+    // ── 1. RMS gate + peak tracking: ignore frames below -40 dBFS ─────────
     let sumSq = 0;
-    for (let i = 0; i < audioData.length; i++) {
-      sumSq += audioData[i] * audioData[i];
+    let peakAbs = 0;
+    for (let i = 0; i < N; i++) {
+      const s = audioData[i];
+      sumSq += s * s;
+      const a = Math.abs(s);
+      if (a > peakAbs) peakAbs = a;
     }
-    const rms = Math.sqrt(sumSq / audioData.length);
+    const rms = Math.sqrt(sumSq / N);
 
-    // Instantaneous Attack / Transient Impulse Detection (> 20dB jump in < 30ms)
-    const riseRatio = rms / (this.prevRms + 1e-6);
-    let isTransientImpulse = false;
-    if (rms > 0.005 && riseRatio > 10) { // > 20dB instant jump
-      isTransientImpulse = true;
-      this.transientCooldown = 2; // Suppress current & next 2 frames
-    }
-    this.prevRms = rms;
-
-    if (rms < this.silenceThreshold) {
-      this.pitchHistory = [];
-      return {
-        frequency: 0,
-        confidence: 0,
-        rmsLevel: rms,
-        classification: this.updatePersistence('silence'),
-        brightnessScore: 0,
-        isStable: false,
-      };
+    if (rms < this.rmsFloor) {
+      const result = emit('background_noise', rms);
+      this.logFrame(result);
+      return result;
     }
 
-    if (this.transientCooldown > 0) {
-      this.transientCooldown--;
-      return {
-        frequency: 0,
-        confidence: 0,
-        rmsLevel: rms,
-        classification: this.updatePersistence('noise'),
-        brightnessScore: 0,
-        isStable: false,
-      };
+    // ── 2. Crest factor gate: reject sharp impulsive transients ───────────
+    // Knocks, taps, and claps have a very short, sharp peak against a
+    // otherwise-quiet frame — a much higher peak/RMS ratio than sustained
+    // voiced speech. This must run before FFT/autocorrelation so obvious
+    // percussive hits never reach classification at all.
+    const crestFactorDb = 20 * Math.log10((peakAbs / (rms + 1e-12)) + 1e-12);
+    if (crestFactorDb > PitchDetector.MAX_CREST_FACTOR_DB) {
+      const result = emit('background_noise', rms, 0, 0, 0, 0, 0, 0, crestFactorDb, 0);
+      this.logFrame(result);
+      return result;
     }
 
-    // 2. Spectral Analysis with 85 Hz High-Pass Filter & Brightness Scoring
-    const { brightnessScore, lowBandActive, highBandActive } = this.analyzeSpectrum(audioData);
+    // ── 3. Zero-Crossing Rate (ZCR) ───────────────────────────────────────
+    let zeroCrossings = 0;
+    for (let i = 1; i < N; i++) {
+      if ((audioData[i] >= 0 && audioData[i - 1] < 0) || (audioData[i] < 0 && audioData[i - 1] >= 0)) {
+        zeroCrossings++;
+      }
+    }
+    const zcr = zeroCrossings / N;
 
-    // 3. Autocorrelation for F0 (Search range: 85 Hz to 450 Hz)
-    const minLag = Math.floor(this.sampleRate / 450); // 450 Hz max search
-    const maxLag = Math.floor(this.sampleRate / 85);  // 85 Hz min search (High-Pass cutoff)
+    // ── 4. Hann window & FFT ──────────────────────────────────────────────
+    const windowed = this.applyHannWindow(audioData);
+    const fftResult = this.computeFFT(windowed);
+    
+    const { 
+      sfm, spectralCentroid, eAbove2k5_ratio
+    } = this.analyzeSpectrum(fftResult, N);
 
-    let bestCorrelation = 0;
+    // ── 5. Normalized autocorrelation F0 (80–600 Hz) ─────────────────────
+    const minLag = Math.floor(this.sampleRate / PitchDetector.MAX_FREQUENCY_HZ);
+    const maxLag = Math.floor(this.sampleRate / PitchDetector.MIN_FREQUENCY_HZ);
+    let bestCorr = 0;
     let bestLag = 0;
-
-    for (let lag = minLag; lag <= maxLag && lag < audioData.length; lag++) {
-      let correlation = 0;
-      let norm1 = 0;
-      let norm2 = 0;
-
-      for (let i = 0; i < audioData.length - lag; i++) {
-        correlation += audioData[i] * audioData[i + lag];
-        norm1 += audioData[i] * audioData[i];
-        norm2 += audioData[i + lag] * audioData[i + lag];
+    for (let lag = minLag; lag <= maxLag && lag < N; lag++) {
+      let corr = 0, n1 = 0, n2 = 0;
+      for (let i = 0; i < N - lag; i++) {
+        corr += audioData[i] * audioData[i + lag];
+        n1   += audioData[i] * audioData[i];
+        n2   += audioData[i + lag] * audioData[i + lag];
       }
-
-      const normalizedCorrelation = correlation / (Math.sqrt(norm1 * norm2) + 1e-10);
-
-      if (normalizedCorrelation > bestCorrelation) {
-        bestCorrelation = normalizedCorrelation;
-        bestLag = lag;
-      }
+      const nc = corr / (Math.sqrt(n1 * n2) + 1e-10);
+      if (nc > bestCorr) { bestCorr = nc; bestLag = lag; }
     }
-
     const frequency = bestLag > 0 ? this.sampleRate / bestLag : 0;
-    const confidence = bestCorrelation;
+    const confidence = bestCorr;
 
-    // 4. Pitch Stability Check (+/- 15% across 3 consecutive frames)
-    this.pitchHistory.push(frequency);
-    if (this.pitchHistory.length > 3) {
-      this.pitchHistory.shift();
+    // Harmonics-to-noise ratio derived from the normalized autocorrelation
+    // peak: HNR(dB) = 10*log10(r / (1-r)). A knock's decaying resonance can
+    // clear a raw-correlation bar of ~0.3 easily; requiring HNR >= 3dB (r
+    // ~= 0.666) is what the original spec actually called for.
+    const r = Math.min(Math.max(bestCorr, 0), 0.999999);
+    const hnrDb = 10 * Math.log10(r / (1 - r) + 1e-12);
+
+    if (
+      !Number.isFinite(frequency)
+      || frequency <= 0
+      || hnrDb < PitchDetector.MIN_HNR_DB
+    ) {
+      const result = emit('no_pitch_detected', rms, frequency, confidence, eAbove2k5_ratio, sfm, spectralCentroid, zcr, crestFactorDb, hnrDb);
+      this.logFrame(result);
+      return result;
     }
 
-    let isPitchStable = false;
-    if (this.pitchHistory.length === 3) {
-      const [f1, f2, f3] = this.pitchHistory;
-      if (f1 >= 85 && f2 >= 85 && f3 >= 85) {
-        const avg = (f1 + f2 + f3) / 3;
-        const maxDiff = Math.max(Math.abs(f1 - avg), Math.abs(f2 - avg), Math.abs(f3 - avg));
-        isPitchStable = (maxDiff / avg) <= 0.15;
-      }
+    // Reject aerodynamic and broadband noise based on spectral flatness.
+    if (sfm > 0.4) {
+      const result = emit('background_noise', rms, frequency, confidence, eAbove2k5_ratio, sfm, spectralCentroid, zcr, crestFactorDb, hnrDb);
+      this.logFrame(result);
+      return result;
     }
 
-    // 5. Classification Logic with Upgraded Acoustic Filtering & Adaptive Brightness (V >= 0.32)
-    let rawState: PitchResult['classification'];
-
-    if (confidence < this.minConfidence || isTransientImpulse) {
-      rawState = 'noise';
-    } else {
-      // Dual-Band Overlap & Adaptive Child Brightness Matrix (V >= 0.28)
-      if (lowBandActive && highBandActive && brightnessScore >= 0.28 && isPitchStable) {
-        rawState = 'child_voice';
-      } else if (lowBandActive && !highBandActive && frequency >= 85 && frequency < 220) {
-        rawState = 'adult_voice';
-      } else if (!lowBandActive && highBandActive && brightnessScore >= 0.28 && frequency >= 220 && frequency <= 450 && isPitchStable) {
-        rawState = 'child_voice';
-      } else {
-        // Refined Pitch Bounds & Adaptive Brightness Disambiguation:
-        if (frequency >= 220 && frequency <= 450) {
-          // Candidate Child Frame: REQUIRE V >= 0.28 AND Pitch Stability
-          if (brightnessScore >= 0.28 && isPitchStable) {
-            rawState = 'child_voice';
-          } else if (brightnessScore < 0.28) {
-            rawState = 'adult_voice'; // Adult female voice harmonic inflection
-          } else {
-            rawState = 'noise'; // Unstable pitch -> transient toy noise
-          }
-        } else if (frequency >= 85 && frequency < 220) {
-          // Candidate Adult Frame
-          rawState = isPitchStable || lowBandActive ? 'adult_voice' : 'noise';
-        } else {
-          // Frequency outside 85-450 Hz range (thud < 85Hz or squeak > 450Hz)
-          rawState = 'noise';
-        }
-      }
+    // If the signal crosses zero more like white noise than a voice wave,
+    // reject the autocorrelation peak as a false pitch.
+    if (zcr > 0.25 && hnrDb < 10) {
+      const result = emit('background_noise', rms, frequency, confidence, eAbove2k5_ratio, sfm, spectralCentroid, zcr, crestFactorDb, hnrDb);
+      this.logFrame(result);
+      return result;
     }
 
-    // 6. 3-Frame Persistence & 100ms Micro-Pause Smoothing
-    const classification = this.updatePersistence(rawState);
+    // ── 6. Classification ─────────────────────────────────────────────────
+    // Do not add per-detector persistence here. The tracker owns the exact
+    // three-frame (150 ms) validation window.
+    const classification = this.classify(frequency, eAbove2k5_ratio, zcr, hnrDb);
 
-    // Lightweight telemetry console logging (throttled every 500ms during audio activity)
-    const now = Date.now();
-    if (now - this.lastLogTime > 500) {
-      this.lastLogTime = now;
-      console.log('[PitchDetector Telemetry]', {
-        rms: rms.toFixed(4),
-        pitchF0: frequency.toFixed(1),
-        confidence: confidence.toFixed(2),
-        isPitchStable,
-        lowBandActive,
-        highBandActive,
-        brightnessScore: brightnessScore.toFixed(3),
-        rawState,
-        emittedState: classification,
-      });
-    }
-
-    return {
-      frequency,
-      confidence,
-      rmsLevel: rms,
-      classification,
-      brightnessScore,
-      isStable: isPitchStable,
-    };
+    const result = emit(classification, rms, frequency, confidence, eAbove2k5_ratio, sfm, spectralCentroid, zcr, crestFactorDb, hnrDb);
+    this.logFrame(result);
+    return result;
   }
 
-  /**
-   * Computes energy in specified spectral bands with an 85 Hz High-Pass Filter
-   * Returns acoustic brightness score V = Energy(2000-4000Hz) / Energy(300-1000Hz)
-   */
-  private analyzeSpectrum(
-    audioData: Float32Array
-  ): { brightnessScore: number; lowBandActive: boolean; highBandActive: boolean } {
-    const N = audioData.length;
-    const fftResult = this.computeFFT(audioData);
-    const halfN = N >> 1;
+  setSilenceThreshold(threshold?: number): void {
+    // Kept for API compatibility. The required -40 dBFS threshold is fixed.
+    void threshold;
+  }
 
-    let energyBox1 = 0; // 300 - 1000 Hz
-    let energyBox2 = 0; // 2000 - 4000 Hz
-    let energyLowBand = 0; // 85 - 220 Hz (High-pass filtered at 150 Hz)
-    let energyHighBand = 0; // >= 220 Hz
-    let energyFormantF1 = 0; // 750 - 1200 Hz
-    let energyFormantF2 = 0; // 2400 - 3500 Hz
+  // ── Classification decision tree ──────────────────────────────────────────
+
+  private classify(
+    f0: number,
+    brightnessScore: number,
+    zcr: number,
+    hnrDb: number,
+  ): PitchResult['classification'] {
+    // If the signal crosses zero more like white noise than a voice wave.
+    if (zcr > 0.25 && hnrDb < 10) return 'background_noise';
+
+    // Adult male
+    if (f0 < 250) return 'adult_voice';
+
+    // Explicitly keep the 250–260 Hz transition in the adult class.
+    if (f0 < 260) return 'adult_voice';
+
+    // Adult female / child speaking: the brightness definition is exactly
+    // E(>2500 Hz) / total spectral energy.
+    if (f0 >= 260 && f0 <= 450) {
+      return brightnessScore < PitchDetector.BRIGHTNESS_THRESHOLD ? 'adult_voice' : 'child_voice';
+    }
+
+    // High-pitched mechanical whines must still have child-like brightness.
+    if (f0 > 450) return brightnessScore >= 0.25 ? 'child_voice' : 'background_noise';
+
+    return 'no_pitch_detected';
+  }
+
+  private logFrame(result: PitchResult): void {
+    if (!this.debugLogging) return;
+    console.debug('[PitchDetector frame]', {
+      f0: Number(result.frequency.toFixed(1)),
+      brightness: Number((result.brightnessScore ?? 0).toFixed(4)),
+      rmsDbfs: Number((20 * Math.log10(Math.max(result.rmsLevel, 1e-12))).toFixed(1)),
+      rms: Number(result.rmsLevel.toFixed(6)),
+      confidence: Number(result.confidence.toFixed(3)),
+      crestFactorDb: Number((result.crestFactorDb ?? 0).toFixed(1)),
+      hnrDb: Number((result.hnrDb ?? 0).toFixed(1)),
+      classification: result.classification,
+    });
+  }
+
+  // ── Signal processing ─────────────────────────────────────────────────────
+
+  private applyHannWindow(buffer: Float32Array): Float32Array {
+    const N = buffer.length;
+    if (this.hannN !== N || !this.hannCoeffs) {
+      this.hannCoeffs = new Float32Array(N);
+      for (let i = 0; i < N; i++) {
+        this.hannCoeffs[i] = 0.5 * (1 - Math.cos((2 * Math.PI * i) / (N - 1)));
+      }
+      this.hannN = N;
+    }
+    const out = new Float32Array(N);
+    for (let i = 0; i < N; i++) out[i] = buffer[i] * this.hannCoeffs[i];
+    return out;
+  }
+
+  private analyzeSpectrum(
+    fftResult: { real: Float32Array; imag: Float32Array },
+    N: number,
+  ) {
+    const halfN = N >> 1;
+    let sfmLogSum = 0, sfmLinSum = 0, sfmBins = 0;
+    
+    let totalEnergy = 0;
+    let centroidNum = 0;
+    let eAbove2k5 = 0;
 
     for (let k = 0; k < halfN; k++) {
       const freq = (k * this.sampleRate) / N;
-
-      // Phone Mic Compensation: High-Pass Filter at 150 Hz to strip low-end speaker cabinet resonance
-      if (freq < 150) continue;
-
-      const magSq = fftResult.real[k] * fftResult.real[k] + fftResult.imag[k] * fftResult.imag[k];
-
-      if (freq >= 300 && freq <= 1000) {
-        energyBox1 += magSq;
-      }
-      if (freq >= 2000 && freq <= 4000) {
-        energyBox2 += magSq;
-      }
-      if (freq >= 150 && freq <= 220) {
-        energyLowBand += magSq;
-      }
-      if (freq >= 220 && freq <= 4000) {
-        energyHighBand += magSq;
-      }
-      if (freq >= 750 && freq <= 1200) {
-        energyFormantF1 += magSq;
-      }
-      if (freq >= 2400 && freq <= 3500) {
-        energyFormantF2 += magSq;
+      const mag2 = fftResult.real[k] ** 2 + fftResult.imag[k] ** 2;
+      totalEnergy += mag2;
+      
+      centroidNum += freq * mag2;
+      
+      if (freq >= 2500) eAbove2k5 += mag2;
+      
+      if (freq >= 300 && freq <= 4000) {
+        const v = mag2 + 1e-12;
+        sfmLogSum += Math.log(v);
+        sfmLinSum += v;
+        sfmBins++;
       }
     }
 
-    const brightnessScore = energyBox2 / (energyBox1 + 1e-9);
-    const hasHighFormants = energyFormantF1 > 1e-7 && energyFormantF2 > 1e-7;
+    const spectralCentroid = totalEnergy > 0 ? centroidNum / totalEnergy : 0;
+    const eAbove2k5_ratio = totalEnergy > 0 ? eAbove2k5 / totalEnergy : 0;
+    const sfm = sfmBins > 0
+      ? Math.min(1, Math.exp(sfmLogSum / sfmBins) / (sfmLinSum / sfmBins + 1e-12))
+      : 0;
 
-    // Parseval normalized RMS per band
-    const normLowRms = Math.sqrt(energyLowBand) / N;
-    const normHighRms = Math.sqrt(energyHighBand) / N;
-
-    // Active band thresholds with sensible floor (0.001)
-    const lowBandActive = normLowRms >= Math.min(this.silenceThreshold * 0.35, 0.001);
-    const highBandActive = normHighRms >= Math.min(this.silenceThreshold * 0.35, 0.001) || hasHighFormants;
-
-    return { brightnessScore, lowBandActive, highBandActive };
+    return { 
+      sfm, spectralCentroid, eAbove2k5_ratio,
+    };
   }
 
-  /**
-   * Standard Radix-2 FFT algorithm for frequency domain analysis
-   */
   private computeFFT(buffer: Float32Array): { real: Float32Array; imag: Float32Array } {
     const N = buffer.length;
     const real = new Float32Array(buffer);
     const imag = new Float32Array(N);
 
-    // Bit reversal permutation
     let j = 0;
     for (let i = 0; i < N - 1; i++) {
-      if (i < j) {
-        const tempReal = real[i];
-        real[i] = real[j];
-        real[j] = tempReal;
-      }
+      if (i < j) { const t = real[i]; real[i] = real[j]; real[j] = t; }
       let k = N >> 1;
-      while (k <= j) {
-        j -= k;
-        k >>= 1;
-      }
+      while (k <= j) { j -= k; k >>= 1; }
       j += k;
     }
 
-    // Cooley-Tukey Radix-2 FFT
     for (let len = 2; len <= N; len <<= 1) {
       const halfLen = len >> 1;
-      const angle = (-2 * Math.PI) / len;
-      const wStepReal = Math.cos(angle);
-      const wStepImag = Math.sin(angle);
-
+      const ang = (-2 * Math.PI) / len;
+      const wsr = Math.cos(ang), wsi = Math.sin(ang);
       for (let i = 0; i < N; i += len) {
-        let wReal = 1;
-        let wImag = 0;
+        let wr = 1, wi = 0;
         for (let k = 0; k < halfLen; k++) {
-          const pos1 = i + k;
-          const pos2 = i + k + halfLen;
-
-          const uReal = real[pos1];
-          const uImag = imag[pos1];
-          const vReal = real[pos2] * wReal - imag[pos2] * wImag;
-          const vImag = real[pos2] * wImag + imag[pos2] * wReal;
-
-          real[pos1] = uReal + vReal;
-          imag[pos1] = uImag + vImag;
-          real[pos2] = uReal - vReal;
-          imag[pos2] = uImag - vImag;
-
-          const nextWReal = wReal * wStepReal - wImag * wStepImag;
-          const nextWImag = wReal * wStepImag + wImag * wStepReal;
-          wReal = nextWReal;
-          wImag = nextWImag;
+          const p = i + k, q = i + k + halfLen;
+          const ur = real[p], ui = imag[p];
+          const vr = real[q] * wr - imag[q] * wi;
+          const vi = real[q] * wi + imag[q] * wr;
+          real[p] = ur + vr; imag[p] = ui + vi;
+          real[q] = ur - vr; imag[q] = ui - vi;
+          const nwr = wr * wsr - wi * wsi;
+          wi = wr * wsi + wi * wsr; wr = nwr;
         }
       }
     }
-
     return { real, imag };
   }
 
-  /**
-   * Maintains a 3-frame (150ms) sliding window buffer with 100ms micro-pause tolerance.
-   * Emits state change when majority (2 out of 3 frames) agree.
-   */
   private updatePersistence(rawState: PitchResult['classification']): PitchResult['classification'] {
-    this.frameHistory.push(rawState);
-    if (this.frameHistory.length > 3) {
-      this.frameHistory.shift();
-    }
-
-    if (this.frameHistory.length === 3) {
-      const counts: Record<string, number> = {};
-      for (const s of this.frameHistory) {
-        counts[s] = (counts[s] || 0) + 1;
-      }
-      let candidateState = this.stableState;
-      for (const state in counts) {
-        if (counts[state] >= 2) {
-          candidateState = state as PitchResult['classification'];
-          break;
-        }
-      }
-
-      // Micro-pause tolerance (up to 100ms / 2 frames) during continuous child speech sentences
-      if (this.stableState === 'child_voice' && (candidateState === 'silence' || candidateState === 'noise')) {
-        if (this.microPauseCount < 2) {
-          this.microPauseCount++;
-          return 'child_voice';
-        }
-      }
-      this.microPauseCount = 0;
-      this.stableState = candidateState;
-    } else {
-      this.stableState = rawState;
-    }
-
-    return this.stableState;
-  }
-
-  setSilenceThreshold(threshold: number): void {
-    // Floor threshold at 0.003 so calibration does not over-silence quiet mics
-    this.silenceThreshold = Math.max(0.003, Math.min(threshold, 0.008));
+    return rawState;
   }
 }
-
-
-
-
-

@@ -168,6 +168,10 @@ export class CVPipeline {
   private micPermissionGranted = false;
   private audioInterval: ReturnType<typeof setInterval> | null = null;
   private timeoutId: ReturnType<typeof setTimeout> | null = null;
+  /** Last gaze snapshot — used by audio-push callback to build full CVMetrics. */
+  private lastGaze: SocialGazeMetrics | null = null;
+  /** Last hand snapshot — used by audio-push callback to build full CVMetrics. */
+  private lastHand: AutoHandMetrics | null = null;
 
   constructor() {
     this.camera = new CameraManager();
@@ -196,6 +200,11 @@ export class CVPipeline {
       try {
         const micStream = await navigator.mediaDevices.getUserMedia({ audio: true });
         await this.voiceTracker.initialize(micStream, audioCtx);
+        this.voiceTracker.setOnUpdate((voiceMetrics: ChildVoiceMetrics) => {
+          if (this.onMetricsUpdate && this.lastGaze && this.lastHand) {
+            this.onMetricsUpdate(this.buildCVMetrics(this.lastGaze, this.lastHand, voiceMetrics));
+          }
+        });
         this.micPermissionGranted = true;
         console.log('[CVPipeline] microphone initialized successfully');
       } catch (err) {
@@ -373,6 +382,10 @@ export class CVPipeline {
         const hand: AutoHandMetrics = this.handTracker.processFrame(handLandmarks);
         const voice: ChildVoiceMetrics = this.voiceTracker.getMetrics();
 
+        // Update snapshots for audio-push callback
+        this.lastGaze = gaze;
+        this.lastHand = hand;
+
         // [YAW-DIAG] track rolling max |yaw| and log every ~2s
         if (gaze.face_detected) {
           const absYaw = Math.abs(gaze.face_yaw_degrees);
@@ -387,58 +400,7 @@ export class CVPipeline {
           yawDiagStart = yawNow;
         }
 
-        const metrics: CVMetrics = {
-          // Social gaze
-          face_detected: gaze.face_detected,
-          social_gaze_active: gaze.social_gaze_active,
-          social_gaze_events: gaze.social_gaze_events,
-          social_gaze_total_sec: gaze.social_gaze_total_sec,
-          social_gaze_percentage: gaze.social_gaze_percentage,
-          longest_gaze_episode_sec: gaze.longest_gaze_episode_sec,
-          current_gaze_episode_sec: gaze.current_episode_sec,
-          gaze_away_events: gaze.gaze_away_events,
-          face_yaw_degrees: gaze.face_yaw_degrees,
-          face_pitch_degrees: gaze.face_pitch_degrees,
-          face_state: gaze.face_state,
-          face_landmarks: gaze.face_landmarks,
-          nose_direction: gaze.nose_direction,
-
-          // Child voice
-          total_child_sounds: voice.total_child_sounds,
-          prompted_sounds: voice.prompted_sounds,
-          spontaneous_sounds: voice.spontaneous_sounds,
-          avg_vocalization_duration_ms: voice.avg_vocalization_duration_ms,
-          avg_prompt_response_latency_ms: voice.avg_prompt_response_latency_ms,
-          voice_state: voice.current_state,
-          audio_level: voice.audio_level,
-          current_pitch_hz: voice.current_pitch_hz,
-          pitch_classification: voice.pitch_classification,
-
-          // Hand gestures
-          hands_detected: hand.hands_detected,
-          hand_active: hand.hand_active,
-          current_gesture: hand.current_gesture,
-          grip_label: hand.grip_label,
-          reaching_events: hand.reaching_events,
-          pointing_events: hand.pointing_events,
-          grasp_events: hand.grasp_events,
-          pincer_grasp_events: hand.pincer_grasp_events,
-          power_grasp_events: hand.power_grasp_events,
-          successful_grasps: hand.successful_grasps,
-          controlled_releases: hand.controlled_releases,
-          wave_events: hand.wave_events,
-          squeeze_events: hand.squeeze_events,
-          hand_active_percentage: hand.hand_active_percentage,
-          hand_landmarks: hand.hand_landmarks,
-          all_hand_landmarks: hand.all_hand_landmarks,
-          pointing_direction: hand.pointing_direction,
-          clap_events: hand.clap_events,
-          per_hand_grips: hand.per_hand_grips,
-
-          adult_voice_count: voice.adult_voice_count,
-
-          timestamp_ms: Date.now(),
-        };
+        const metrics: CVMetrics = this.buildCVMetrics(gaze, hand, voice);
 
         if (this.onMetricsUpdate) {
           this.onMetricsUpdate(metrics);
@@ -451,6 +413,61 @@ export class CVPipeline {
     };
 
     processFrame();
+  }
+
+  private buildCVMetrics(gaze: SocialGazeMetrics, hand: AutoHandMetrics, voice: ChildVoiceMetrics): CVMetrics {
+    return {
+      // Social gaze
+      face_detected: gaze.face_detected,
+      social_gaze_active: gaze.social_gaze_active,
+      social_gaze_events: gaze.social_gaze_events,
+      social_gaze_total_sec: gaze.social_gaze_total_sec,
+      social_gaze_percentage: gaze.social_gaze_percentage,
+      longest_gaze_episode_sec: gaze.longest_gaze_episode_sec,
+      current_gaze_episode_sec: gaze.current_episode_sec,
+      gaze_away_events: gaze.gaze_away_events,
+      face_yaw_degrees: gaze.face_yaw_degrees,
+      face_pitch_degrees: gaze.face_pitch_degrees,
+      face_state: gaze.face_state,
+      face_landmarks: gaze.face_landmarks,
+      nose_direction: gaze.nose_direction,
+
+      // Child voice
+      total_child_sounds: voice.total_child_sounds,
+      prompted_sounds: voice.prompted_sounds,
+      spontaneous_sounds: voice.spontaneous_sounds,
+      avg_vocalization_duration_ms: voice.avg_vocalization_duration_ms,
+      avg_prompt_response_latency_ms: voice.avg_prompt_response_latency_ms,
+      voice_state: voice.current_state,
+      audio_level: voice.audio_level,
+      current_pitch_hz: voice.current_pitch_hz,
+      pitch_classification: voice.pitch_classification,
+
+      // Hand gestures
+      hands_detected: hand.hands_detected,
+      hand_active: hand.hand_active,
+      current_gesture: hand.current_gesture,
+      grip_label: hand.grip_label,
+      reaching_events: hand.reaching_events,
+      pointing_events: hand.pointing_events,
+      grasp_events: hand.grasp_events,
+      pincer_grasp_events: hand.pincer_grasp_events,
+      power_grasp_events: hand.power_grasp_events,
+      successful_grasps: hand.successful_grasps,
+      controlled_releases: hand.controlled_releases,
+      wave_events: hand.wave_events,
+      squeeze_events: hand.squeeze_events,
+      hand_active_percentage: hand.hand_active_percentage,
+      hand_landmarks: hand.hand_landmarks,
+      all_hand_landmarks: hand.all_hand_landmarks,
+      pointing_direction: hand.pointing_direction,
+      clap_events: hand.clap_events,
+      per_hand_grips: hand.per_hand_grips,
+
+      adult_voice_count: voice.adult_voice_count,
+
+      timestamp_ms: Date.now(),
+    };
   }
 
   getCurrentMetrics(): CVMetrics {

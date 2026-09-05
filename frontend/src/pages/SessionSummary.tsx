@@ -164,11 +164,24 @@ export default function SessionSummary() {
   // Trial breakdown
   const trialCounts = useMemo(() => {
     const counts = { responded: 0, partial: 0, no_response: 0, refused: 0 };
-    for (const t of allTrials) {
-      if (t.response in counts) counts[t.response as keyof typeof counts]++;
+    const activityIds = new Set((sessionActivities ?? []).map((activity) => activity.id));
+    const latestByActivity = new Map<string, typeof allTrials[number]>();
+
+    // The session UI records one response per activity. Keep the newest row
+    // for legacy sessions that may contain multiple trial rows per activity.
+    for (const trial of allTrials) {
+      if (!activityIds.has(trial.session_activity_id)) continue;
+      const existing = latestByActivity.get(trial.session_activity_id);
+      if (!existing || new Date(trial.recorded_at).getTime() >= new Date(existing.recorded_at).getTime()) {
+        latestByActivity.set(trial.session_activity_id, trial);
+      }
+    }
+
+    for (const trial of latestByActivity.values()) {
+      if (trial.response in counts) counts[trial.response as keyof typeof counts]++;
     }
     return counts;
-  }, [allTrials]);
+  }, [allTrials, sessionActivities]);
 
   // Per-activity trial counts
   const trialsByActivity = useMemo(() => {

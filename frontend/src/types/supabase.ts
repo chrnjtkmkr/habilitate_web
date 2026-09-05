@@ -1811,34 +1811,43 @@ export type Database = {
       }
       trials: {
         Row: {
+          adult_voice_count: number | null
           created_at: string
           id: string
+          metrics: Json | null
           notes: string | null
           prompt_level: string | null
           recorded_at: string
           response: Database["public"]["Enums"]["trial_response"]
           session_activity_id: string
           trial_number: number
+          word_count: number | null
         }
         Insert: {
+          adult_voice_count?: number | null
           created_at?: string
           id?: string
+          metrics?: Json | null
           notes?: string | null
           prompt_level?: string | null
           recorded_at?: string
           response: Database["public"]["Enums"]["trial_response"]
           session_activity_id: string
           trial_number: number
+          word_count?: number | null
         }
         Update: {
+          adult_voice_count?: number | null
           created_at?: string
           id?: string
+          metrics?: Json | null
           notes?: string | null
           prompt_level?: string | null
           recorded_at?: string
           response?: Database["public"]["Enums"]["trial_response"]
           session_activity_id?: string
           trial_number?: number
+          word_count?: number | null
         }
         Relationships: [
           {

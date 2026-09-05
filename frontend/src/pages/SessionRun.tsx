@@ -12,7 +12,7 @@ import {
   useUpdateSessionActivityNotes,
 } from '../lib/queries/sessions';
 import { useActiveGoals } from '../lib/queries/goals';
-import { useCreateTrial, useTrialsBySession } from '../lib/queries/trials';
+import { useCreateTrial, useDeleteTrial, useTrialsBySession } from '../lib/queries/trials';
 import { useCreateSessionEvent } from '../lib/queries/sessionEvents';
 import { useRecommendPlan, useAcceptPlan } from '../lib/queries/planRecommender';
 import { useToast } from '../lib/toastStore';
@@ -82,9 +82,8 @@ export default function SessionRun() {
   const [noteText, setNoteText] = useState('');
   const [endConfirmOpen, setEndConfirmOpen] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
-  // Single-selection state per activity: stores the ONE active TrialResponse or null.
-  // Replaces the old cumulative counter map — clicking a response overwrites the
-  // previous selection for that activity; clicking the same response toggles it off.
+  // One response per activity. The active activity may be corrected before
+  // navigation; each correction upserts the same trial row.
   const [stepResponses, setStepResponses] = useState<Record<string, TrialResponse | null>>({});
   const [trialPending, setTrialPending] = useState(false);
   // Ref mirrors stepResponses to avoid stale closures in rapid-tap scenarios
@@ -164,6 +163,7 @@ export default function SessionRun() {
   const endActivityMut = useEndSessionActivity();
   const startActivityMut = useStartSessionActivity();
   const createTrial = useCreateTrial();
+  const deleteTrial = useDeleteTrial();
   const createSessionEvent = useCreateSessionEvent();
   const updateNotes = useUpdateSessionActivityNotes();
 
@@ -451,52 +451,111 @@ export default function SessionRun() {
     ? (sessionActivities[currentActivityIndex] ?? null)
     : null;
 
-  async function handleRecordTrial(response: TrialResponse) {
-    if (isPaused || !currentActivity) return;
+  function getCurrentActivityResponse(): TrialResponse | null {
+    if (!currentActivity) return null;
+    return stepResponsesRef.current[currentActivity.id]
+      ?? stepResponses[currentActivity.id]
+      ?? null;
+  }
+
+  async function handleRecordTrial(response: TrialResponse | null): Promise<boolean> {
+    if (isPaused || !currentActivity) {
+      if (isDebugMode) {
+        console.debug('[SessionRun] response ignored', {
+          response,
+          isPaused,
+          hasCurrentActivity: currentActivity !== null,
+        });
+      }
+      return true;
+    }
     const saId = currentActivity.id;
-    // Read the current single-selection from the ref (avoids stale closures on rapid taps)
     const previousSelection = stepResponsesRef.current[saId] ?? null;
+    if (previousSelection === response || trialPending) {
+      if (isDebugMode) {
+        console.debug('[SessionRun] response ignored', {
+          response,
+          previousSelection,
+          trialPending,
+          activityId: saId,
+        });
+      }
+      return true;
+    }
 
-    // Toggle off if the same button is tapped again; otherwise switch to the new selection.
-    // We do NOT block on trialPending when switching to a different response — this ensures
-    // clicking e.g. "Partial" right after "Responded" registers immediately without dropping.
-    const newSelection: TrialResponse | null = previousSelection === response ? null : response;
+    if (isDebugMode) {
+      console.debug('[SessionRun] response clicked', { response, activityId: saId });
+    }
 
-    // Only debounce re-taps of the already-pending same selection
-    if (trialPending && previousSelection === response) return;
-
-    // Optimistic update — write to both state and ref immediately so the UI reflects
-    // the new selection before the network round-trip completes.
-    setStepResponses((prev) => ({ ...prev, [saId]: newSelection }));
-    stepResponsesRef.current = { ...stepResponsesRef.current, [saId]: newSelection };
+    // Optimistic update — write to both state and ref immediately so corrections
+    // update the counters and highlight before the upsert completes.
+    setStepResponses((prev) => ({ ...prev, [saId]: response }));
+    stepResponsesRef.current = { ...stepResponsesRef.current, [saId]: response };
     setTrialPending(true);
 
     try {
-      if (newSelection !== null) {
-        // Record the newly selected response (trialNumber = 1 — single selection per step)
-        await createTrial.mutateAsync({
+      if (response === null) {
+        await deleteTrial.mutateAsync({
+          sessionId,
+          activityId: currentActivity.activity_id,
           sessionActivityId: saId,
-          response: newSelection,
           trialNumber: 1,
         });
+      } else {
+        await createTrial.mutateAsync({
+          sessionId,
+          activityId: currentActivity.activity_id,
+          sessionActivityId: saId,
+          responseStatus: response,
+          trialNumber: 1,
+          wordCount: cvMetricsLatestRef.current?.total_child_sounds ?? 0,
+          adultVoiceCount: cvMetricsLatestRef.current?.adult_voice_count ?? 0,
+          metrics: cvMetricsLatestRef.current ? {
+            total_child_sounds: cvMetricsLatestRef.current.total_child_sounds,
+            prompted_sounds: cvMetricsLatestRef.current.prompted_sounds,
+            spontaneous_sounds: cvMetricsLatestRef.current.spontaneous_sounds,
+            avg_vocalization_duration_ms: cvMetricsLatestRef.current.avg_vocalization_duration_ms,
+            avg_prompt_response_latency_ms: cvMetricsLatestRef.current.avg_prompt_response_latency_ms,
+            voice_state: cvMetricsLatestRef.current.voice_state,
+            audio_level: cvMetricsLatestRef.current.audio_level,
+            current_pitch_hz: cvMetricsLatestRef.current.current_pitch_hz,
+            pitch_classification: cvMetricsLatestRef.current.pitch_classification,
+          } : null,
+        });
       }
-      // If toggled off (newSelection === null) we simply clear the UI state;
-      // the DB row from the previous selection stays as an audit record.
     } catch (err) {
       // Rollback to previous selection on unexpected errors
       setStepResponses((prev) => ({ ...prev, [saId]: previousSelection }));
       stepResponsesRef.current = { ...stepResponsesRef.current, [saId]: previousSelection };
       const msg = err instanceof Error ? err.message : t('error_generic');
+      console.error('[SessionRun] response persistence failed', {
+        response,
+        activityId: saId,
+        error: err,
+      });
       toast(msg, 'error');
+      return false;
     } finally {
       setTrialPending(false);
     }
+    return true;
   }
 
   async function navigateActivity(direction: 'next' | 'prev') {
     if (isPaused || !sessionActivities) return;
+    if (trialPending) return;
     const nextIndex = direction === 'next' ? currentActivityIndex + 1 : currentActivityIndex - 1;
     if (nextIndex < 0 || nextIndex >= sessionActivities.length) return;
+
+    // Use the therapist's explicit choice. Never replace it with no_response
+    // during navigation; require a choice before ending the activity.
+    if (currentActivity) {
+      const selectedResponse = getCurrentActivityResponse();
+      if (selectedResponse === null) {
+        toast(t('activity_response_required'), 'error');
+        return;
+      }
+    }
 
     // End current
     if (currentActivity) {
@@ -679,14 +738,10 @@ export default function SessionRun() {
     setSpontMoments((prev) => prev.filter((_, i) => i !== index));
   }
 
-  async function handleRecordTrialWrapped(response: TrialResponse) {
+  async function handleRecordTrialWrapped(response: TrialResponse | null) {
     if (isPaused) return;
     // eslint-disable-next-line react-hooks/purity -- event handler only
     lastTrialTimeRef.current = Date.now();
-    // Note: lastTrialResponse is kept for the smart-pulse cooldown ref only.
-    // We no longer render it as an inline toast — that was visually misleading
-    // and made it appear the selection had snapped back to "Responded".
-    setLastTrialResponse(response);
     await handleRecordTrial(response);
   }
 
@@ -964,17 +1019,19 @@ export default function SessionRun() {
 
   const totalActivities = sessionActivities?.length ?? 0;
   const act = currentActivity?.activity;
-  // Derive display counts from the single-selection model:
-  // each activity has at most one active selection, so each count is 0 or 1.
+  // Derive cumulative counts from the one-response-per-activity model. A
+  // correction replaces the mapped value, so it cannot double-increment.
   const activeResponse = currentActivity ? (stepResponses[currentActivity.id] ?? null) : null;
+  const recordedResponses = Object.values(stepResponses).filter(
+    (response): response is TrialResponse => response !== null,
+  );
   const counts = {
-    responded: activeResponse === 'responded' ? 1 : 0,
-    partial: activeResponse === 'partial' ? 1 : 0,
-    no_response: activeResponse === 'no_response' ? 1 : 0,
-    refused: activeResponse === 'refused' ? 1 : 0,
+    responded: recordedResponses.filter((response) => response === 'responded').length,
+    partial: recordedResponses.filter((response) => response === 'partial').length,
+    no_response: recordedResponses.filter((response) => response === 'no_response').length,
+    refused: recordedResponses.filter((response) => response === 'refused').length,
   };
-  // T = 1 when a response is recorded, 0 when none selected yet
-  const totalTrials = activeResponse !== null ? 1 : 0;
+  const totalResponses = recordedResponses.length;
   const isLast = currentActivityIndex === totalActivities - 1;
 
   const actIcon = act ? getDomainIcon(act.developmental_domain) : '♪';
@@ -1192,8 +1249,8 @@ export default function SessionRun() {
           <div className="shrink-0 p-3 lg:p-4" style={S.card}>
             {/* Counter strip — compact on narrow */}
             <p className="text-[12px] mb-1.5 lg:text-[14px] lg:mb-2" style={{ fontFeatureSettings: '"tnum"' }}>
-              {/* T shows current step status: 0 = no selection, 1 = recorded */}
-              <span style={S.text3}>T</span><span className="font-bold" style={S.text1}>{totalTrials}</span>
+              {/* A is the number of activities with a recorded response. */}
+              <span style={S.text3}>A</span><span className="font-bold" style={S.text1}>{totalResponses}</span>
               <span style={S.text3}> ✓</span><span className="font-bold" style={{ color: '#1A6B4F' }}>{counts.responded}</span>
               <span style={S.text3}> ⚠</span><span className="font-bold" style={{ color: '#92600A' }}>{counts.partial}</span>
               <span style={S.text3}> ✗</span><span className="font-bold" style={{ color: '#5E5E7A' }}>{counts.no_response}</span>
@@ -1238,7 +1295,7 @@ export default function SessionRun() {
               ]).map((b) => {
                 const isActive = activeResponse === b.r;
                 return (
-                  <button key={b.r} onClick={() => handleRecordTrialWrapped(b.r)}
+                  <button type="button" key={b.r} onClick={() => { void handleRecordTrialWrapped(activeResponse === b.r ? null : b.r); }}
                     disabled={isPaused || trialPending}
                     className={`flex items-center justify-center gap-1.5 rounded-xl text-[13px] font-semibold transition-all duration-150 sm:gap-2 sm:text-[15px] ${isPaused || trialPending ? 'opacity-40 cursor-not-allowed' : 'active:scale-95 active:brightness-90'}`}
                     style={{
@@ -1278,8 +1335,8 @@ export default function SessionRun() {
                   {t('end_session')}
                 </button>
               ) : (
-                <button onClick={() => navigateActivity('next')} disabled={isPaused}
-                  className={`rounded-xl px-4 text-[13px] font-semibold text-white lg:px-6 lg:text-[14px] ${isPaused ? 'opacity-40' : ''}`} style={{ backgroundColor: '#5B5BF0', minHeight: 44 }}>
+                <button onClick={() => navigateActivity('next')} disabled={isPaused || trialPending}
+                  className={`rounded-xl px-4 text-[13px] font-semibold text-white lg:px-6 lg:text-[14px] ${isPaused || trialPending ? 'opacity-40' : ''}`} style={{ backgroundColor: '#5B5BF0', minHeight: 44 }}>
                   {t('next_step')} →
                 </button>
               )}

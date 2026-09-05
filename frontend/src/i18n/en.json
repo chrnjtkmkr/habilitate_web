@@ -314,6 +314,7 @@
   "trial_responded": "Responded",
   "trial_partial": "Partial",
   "trial_no_response": "No Response",
+  "activity_response_required": "Select a response before moving to the next activity.",
   "trial_refused": "Refused",
 
   "previous_activity": "Previous",

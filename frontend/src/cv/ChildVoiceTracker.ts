@@ -1,21 +1,21 @@
 /**
- * ChildVoiceTracker — automatically counts child vocalizations
- * using pitch-based speaker separation.
+ * ChildVoiceTracker — counts child vocalizations and adult voice segments
+ * using pitch-based speaker separation driven by PitchDetector.
  *
- * NO FACILITATOR INPUT REQUIRED.
- *
- * How it works:
- * 1. PitchDetector runs every 50ms, classifying audio as child/adult/silence/noise
- * 2. A "child vocalization episode" starts when child_voice is detected for >200ms
- * 3. Episode ends when child_voice is absent for >500ms
- * 4. After adult_voice segment, if child_voice follows within 5s -> "prompted vocalization"
- * 5. Otherwise -> "spontaneous vocalization"
- *
- * Calibration: first 5 seconds baseline noise measurement
+ * Architecture:
+ *   • PitchDetector provides per-frame classification at 20 Hz (50 ms frames).
+ *   • AudioSegmentTracker validates a speaker event after exactly three
+ *     matching 50 ms frames (150 ms), then counts it once per phrase.
+ *   • Prompted vs spontaneous detection preserved:
+ *       – Child utterance that starts within 5 s of the last adult segment → prompted.
+ *   • Calibration: first 5 s baseline RMS → dynamic silence threshold.
+ *   • setOnUpdate() callback is invoked every processed frame so CVPipeline
+ *     can push metric updates at audio rate (20 Hz) instead of visual rate (15 fps).
  */
 
 import { PitchDetector } from './PitchDetector';
 import type { PitchResult } from './PitchDetector';
+import { AudioSegmentTracker } from './AudioSegmentTracker';
 
 export interface ChildVoiceMetrics {
   total_child_sounds: number;
@@ -24,6 +24,7 @@ export interface ChildVoiceMetrics {
   avg_vocalization_duration_ms: number;
   avg_prompt_response_latency_ms: number;
   adult_voice_count: number;
+  /** Mapped from frame labels to the UI-compatible speaking state. */
   current_state: 'child_speaking' | 'adult_speaking' | 'silence' | 'noise';
   audio_level: number;
   current_pitch_hz: number;
@@ -39,6 +40,18 @@ interface VoiceEpisode {
   latency_ms: number | null;
 }
 
+function isChildClass(c: string): boolean {
+  return c === 'child_voice' || c === 'child_speaking';
+}
+function isAdultClass(c: string): boolean {
+  return c === 'adult_male' || c === 'adult_female'
+      || c === 'adult_voice' || c === 'adult_speaking';
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+//  ChildVoiceTracker
+// ─────────────────────────────────────────────────────────────────────────────
+
 export class ChildVoiceTracker {
   private pitchDetector: PitchDetector;
   private audioContext: AudioContext | null = null;
@@ -48,48 +61,47 @@ export class ChildVoiceTracker {
   private dataArray: Float32Array<ArrayBuffer> | null = null;
   private visibilityHandler: (() => void) | null = null;
 
-  // State tracking
-  private childSpeakingStart: number | null = null;
-  private childSilentSince: number | null = null;
-  private adultSpeakingEnd: number | null = null;
+  // Utterance segmentation engine
+  private segmentTracker = new AudioSegmentTracker();
+
+  // Episode store (child utterances only, for prompted/spontaneous breakdown)
   private episodes: VoiceEpisode[] = [];
+
+  // Counters driven exclusively by AudioSegmentTracker closures
+  private adultVoiceCount = 0;
+
+  // Prompt detection: timestamp when last adult segment ended
+  private adultSpeakingEnd: number | null = null;
+  private readonly promptWindow = 5000; // ms
+
+  // Last classified frame
   private lastPitch: PitchResult | null = null;
-  private adultVoiceCount: number = 0;
-  private inAdultVoice: boolean = false;
 
   // Calibration
-  private isCalibrating: boolean = true;
-  private calibrationStart: number = 0;
+  private isCalibrating = true;
+  private calibrationStart = 0;
   private calibrationSamples: number[] = [];
 
-  // Thresholds
-  private minEpisodeDuration: number = 200;
-  private silenceGap: number = 500;
-  private promptWindow: number = 5000;
-
-  // Subscriber callback
+  // Subscriber
   private onUpdateCallback: ((metrics: ChildVoiceMetrics) => void) | null = null;
-  private lastEmitLogTime: number = 0;
 
   constructor() {
     this.pitchDetector = new PitchDetector();
+    this.wireSegmentTracker();
   }
+
+  // ── Subscriber ──────────────────────────────────────────────────────────
 
   public setOnUpdate(callback: (metrics: ChildVoiceMetrics) => void): void {
     this.onUpdateCallback = callback;
   }
 
-  /**
-   * @param micStream - MediaStream with audio tracks from getUserMedia
-   * @param audioCtx - AudioContext created and resumed inside a user gesture
-   *                   (click handler) so it starts in 'running' state.
-   */
+  // ── Initialization ──────────────────────────────────────────────────────
+
   async initialize(micStream: MediaStream, audioCtx: AudioContext): Promise<void> {
     this.stream = micStream;
     this.audioContext = audioCtx;
 
-    // The context should already be running (resumed inside the gesture),
-    // but if the browser suspended it between creation and now, try again.
     if (this.audioContext.state === 'suspended') {
       await this.audioContext.resume();
     }
@@ -99,14 +111,13 @@ export class ChildVoiceTracker {
     this.analyser.fftSize = 2048;
     this.sourceNode.connect(this.analyser);
     this.dataArray = new Float32Array(this.analyser.fftSize) as Float32Array<ArrayBuffer>;
+
     this.pitchDetector = new PitchDetector(this.audioContext.sampleRate);
     this.calibrationStart = Date.now();
     this.isCalibrating = true;
     this.calibrationSamples = [];
 
-    // When the tab loses focus, the browser may suspend the AudioContext.
-    // Re-resume it when the tab becomes visible again so a therapist
-    // switching apps mid-session does not lose audio measurement.
+    // Re-resume AudioContext when tab regains focus
     this.visibilityHandler = () => {
       if (document.visibilityState === 'visible' && this.audioContext?.state === 'suspended') {
         this.audioContext.resume().catch(() => {});
@@ -114,20 +125,21 @@ export class ChildVoiceTracker {
     };
     document.addEventListener('visibilitychange', this.visibilityHandler);
 
-    console.log('[ChildVoiceTracker] initialized — sampleRate:', this.audioContext.sampleRate, 'state:', this.audioContext.state, 'tracks:', micStream.getAudioTracks().length);
+    console.log('[ChildVoiceTracker] initialized — sampleRate:', this.audioContext.sampleRate,
+      'state:', this.audioContext.state, 'tracks:', micStream.getAudioTracks().length);
   }
 
+  // ── Per-frame processing ─────────────────────────────────────────────────
+
   process(): ChildVoiceMetrics {
-    if (!this.analyser || !this.dataArray) {
-      return this.emptyMetrics();
-    }
+    if (!this.analyser || !this.dataArray) return this.emptyMetrics();
 
     this.analyser.getFloatTimeDomainData(this.dataArray);
     const pitch = this.pitchDetector.detectPitch(this.dataArray);
     this.lastPitch = pitch;
     const now = Date.now();
 
-    // Calibration phase (first 5 seconds)
+    // Calibration phase — first 5 s
     if (this.isCalibrating) {
       this.calibrationSamples.push(pitch.rmsLevel);
       if (now - this.calibrationStart > 5000) {
@@ -138,109 +150,41 @@ export class ChildVoiceTracker {
       }
     }
 
-    const rawState = pitch.classification;
-    const isChild = rawState === 'child_voice' || rawState === 'child' || rawState === 'child_speaking';
-    const isAdult = rawClassMatch(rawState, ['adult_voice', 'adult', 'adult_speaking']);
+    // Feed frame to segment tracker
+    this.segmentTracker.processFrame(pitch);
 
-    // State machine & segment tracking
-    if (isChild) {
-      this.handleChildVoice(now);
-      this.inAdultVoice = false;
-    } else if (isAdult) {
-      if (!this.inAdultVoice) {
-        this.adultVoiceCount++;
-        this.inAdultVoice = true;
-      }
-      this.handleAdultVoice(now);
-    } else {
-      this.inAdultVoice = false;
-      this.handleSilence(now);
-    }
-
+    // Build metrics and push to subscriber
     const metrics = this.getMetrics(pitch);
+    if (this.onUpdateCallback) this.onUpdateCallback(metrics);
 
-    // Invoke subscriber callback if set
-    if (this.onUpdateCallback) {
-      this.onUpdateCallback(metrics);
-    }
-
-    // Debug Console Logger Bridge
-    if (now - this.lastEmitLogTime > 500) {
-      this.lastEmitLogTime = now;
-      console.log('[VoiceTracker emit]:', {
-        state: metrics.current_state,
-        childCount: metrics.total_child_sounds,
-        adultCount: metrics.adult_voice_count,
-        rms: metrics.audio_level.toFixed(4),
-      });
-    }
+    // Debug log (throttled every 500 ms)
+    console.log('[VoiceTracker State Received]:', pitch.classification,
+      'Current Counts:', { childCount: metrics.total_child_sounds, adultCount: metrics.adult_voice_count });
 
     return metrics;
   }
 
-
-  private handleChildVoice(now: number): void {
-    if (this.childSpeakingStart === null) {
-      this.childSpeakingStart = now;
-    }
-    this.childSilentSince = null;
-  }
-
-  private handleAdultVoice(now: number): void {
-    this.adultSpeakingEnd = now;
-    this.maybeEndChildEpisode(now);
-  }
-
-  private handleSilence(now: number): void {
-    if (this.childSpeakingStart !== null && this.childSilentSince === null) {
-      this.childSilentSince = now;
-    }
-    this.maybeEndChildEpisode(now);
-  }
-
-  private maybeEndChildEpisode(now: number): void {
-    if (this.childSpeakingStart !== null && this.childSilentSince !== null) {
-      if (now - this.childSilentSince > this.silenceGap) {
-        const duration = this.childSilentSince - this.childSpeakingStart;
-        if (duration >= this.minEpisodeDuration) {
-          const isPrompted = this.adultSpeakingEnd !== null &&
-            (this.childSpeakingStart - this.adultSpeakingEnd) < this.promptWindow;
-          const latency = isPrompted
-            ? this.childSpeakingStart - this.adultSpeakingEnd!
-            : null;
-
-          this.episodes.push({
-            start: this.childSpeakingStart,
-            end: this.childSilentSince,
-            duration_ms: duration,
-            type: isPrompted ? 'prompted' : 'spontaneous',
-            latency_ms: latency,
-          });
-        }
-        this.childSpeakingStart = null;
-        this.childSilentSince = null;
-      }
-    }
-  }
+  // ── Metrics snapshot ─────────────────────────────────────────────────────
 
   getMetrics(pitch?: PitchResult): ChildVoiceMetrics {
-    const p = pitch || this.lastPitch;
-    const prompted = this.episodes.filter((e) => e.type === 'prompted');
-    const spontaneous = this.episodes.filter((e) => e.type === 'spontaneous');
-    const allDurations = this.episodes.map((e) => e.duration_ms);
-    const promptedLatencies = prompted
-      .filter((e) => e.latency_ms !== null)
-      .map((e) => e.latency_ms!);
+    const p = pitch ?? this.lastPitch;
+    const prompted = this.episodes.filter(e => e.type === 'prompted');
+    const spontaneous = this.episodes.filter(e => e.type === 'spontaneous');
+    const allDurations = this.episodes.map(e => e.duration_ms);
+    const promptedLatencies = prompted.filter(e => e.latency_ms !== null).map(e => e.latency_ms!);
 
-    const rawClass = p?.classification || 'silence';
-    const isChildState = rawClass === 'child_voice' || rawClass === 'child' || rawClass === 'child_speaking';
-    const isAdultState = rawClassMatch(rawClass, ['adult_voice', 'adult', 'adult_speaking']);
+    const rawClass: string = p?.classification ?? 'silence';
+    const isChildState = isChildClass(rawClass);
+    const isAdultState = isAdultClass(rawClass);
 
-    const activeChildSound = (this.childSpeakingStart !== null && (Date.now() - this.childSpeakingStart >= this.minEpisodeDuration)) ? 1 : 0;
+    // Map fine-grained labels to backward-compatible current_state
+    let currentState: ChildVoiceMetrics['current_state'] = 'silence';
+    if (isChildState) currentState = 'child_speaking';
+    else if (isAdultState) currentState = 'adult_speaking';
+    else if (rawClass === 'noise') currentState = 'noise';
 
     return {
-      total_child_sounds: this.episodes.length + activeChildSound,
-
+      total_child_sounds: this.episodes.length,
       prompted_sounds: prompted.length,
       spontaneous_sounds: spontaneous.length,
       avg_vocalization_duration_ms:
@@ -252,45 +196,66 @@ export class ChildVoiceTracker {
           ? promptedLatencies.reduce((a, b) => a + b, 0) / promptedLatencies.length
           : 0,
       adult_voice_count: this.adultVoiceCount,
-      current_state: isChildState
-        ? 'child_speaking'
-        : isAdultState
-          ? 'adult_speaking'
-          : 'silence',
-      audio_level: p?.rmsLevel || 0,
-      current_pitch_hz: p?.frequency || 0,
+      current_state: currentState,
+      audio_level: p?.rmsLevel ?? 0,
+      current_pitch_hz: p?.frequency ?? 0,
       pitch_classification: rawClass,
-      pitch_confidence: p?.confidence || 0,
+      pitch_confidence: p?.confidence ?? 0,
     };
   }
 
+  // ── Lifecycle ────────────────────────────────────────────────────────────
+
   reset(): void {
+    this.segmentTracker.forceClose();
     this.episodes = [];
-    this.childSpeakingStart = null;
-    this.childSilentSince = null;
-    this.adultSpeakingEnd = null;
     this.adultVoiceCount = 0;
-    this.inAdultVoice = false;
+    this.adultSpeakingEnd = null;
   }
 
   stop(): void {
+    this.segmentTracker.forceClose();
     if (this.visibilityHandler) {
       document.removeEventListener('visibilitychange', this.visibilityHandler);
       this.visibilityHandler = null;
     }
-    if (this.sourceNode) {
-      this.sourceNode.disconnect();
-      this.sourceNode = null;
-    }
-    if (this.audioContext) {
-      this.audioContext.close().catch(() => {});
-      this.audioContext = null;
-    }
+    if (this.sourceNode) { this.sourceNode.disconnect(); this.sourceNode = null; }
+    if (this.audioContext) { this.audioContext.close().catch(() => {}); this.audioContext = null; }
     this.analyser = null;
-    if (this.stream) {
-      this.stream.getTracks().forEach((t) => t.stop());
-      this.stream = null;
-    }
+    if (this.stream) { this.stream.getTracks().forEach(t => t.stop()); this.stream = null; }
+  }
+
+  // ── Internal ─────────────────────────────────────────────────────────────
+
+  /** Wire AudioSegmentTracker callbacks → episode store + counters. */
+  private wireSegmentTracker(): void {
+    this.segmentTracker.onChildSegment = (startMs, endMs) => {
+      const duration = endMs - startMs;
+      const isPrompted = this.adultSpeakingEnd !== null
+        && (startMs - this.adultSpeakingEnd) < this.promptWindow;
+      const latency = isPrompted ? startMs - this.adultSpeakingEnd! : null;
+
+      this.episodes.push({
+        start: startMs,
+        end: endMs,
+        duration_ms: duration,
+        type: isPrompted ? 'prompted' : 'spontaneous',
+        latency_ms: latency,
+      });
+
+      console.log('[VoiceTracker] child segment closed —',
+        isPrompted ? 'PROMPTED' : 'SPONTANEOUS',
+        `duration ${duration}ms`,
+        `total_child_sounds=${this.episodes.length}`);
+    };
+
+    this.segmentTracker.onAdultSegment = (startMs, endMs) => {
+      this.adultVoiceCount++;
+      this.adultSpeakingEnd = endMs;
+      console.log('[VoiceTracker] adult segment closed —',
+        `duration ${endMs - startMs}ms`,
+        `adult_voice_count=${this.adultVoiceCount}`);
+    };
   }
 
   private emptyMetrics(): ChildVoiceMetrics {
@@ -309,8 +274,3 @@ export class ChildVoiceTracker {
     };
   }
 }
-
-function rawClassMatch(val: string, targets: string[]): boolean {
-  return targets.includes(val);
-}
-
