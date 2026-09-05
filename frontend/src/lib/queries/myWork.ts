@@ -197,9 +197,6 @@ export function buildMomentSentence(m: Moment, t: (key: string, opts?: Record<st
     if (m.attributeId === 'stays_activity' && m.metric === 'longest_duration_ms') {
       return t('moment_pb_stayed_with_activity', { child, seconds: msToSeconds(m.value) });
     }
-    if (m.attributeId === 'response_to_name' && m.metric === 'fastest_latency_ms') {
-      return t('moment_pb_responded_to_name', { child, seconds: msToSeconds(m.value) });
-    }
     // Fallback for unknown personal bests
     return t('moment_pb_generic', { child, label: m.attributeLabel });
   }
@@ -209,9 +206,6 @@ export function buildMomentSentence(m: Moment, t: (key: string, opts?: Record<st
   }
 
   // Milestones — specific per attribute
-  if (m.attributeId === 'response_to_name') {
-    return t('moment_ms_responded_to_name', { child });
-  }
   if (m.attributeId === 'looks_at_you') {
     return t('moment_ms_looked_at_you', { child });
   }

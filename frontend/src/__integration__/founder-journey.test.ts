@@ -251,16 +251,16 @@ describe('Founder-therapist journey (live Supabase)', () => {
     expect(sess!.status).toBe('in_progress');
   }, 15_000);
 
-  // ─── STEP 7: Insert a probe (RTN candidate) ───────────────────────
+  // ─── STEP 7: Insert a probe ──────────────────────────────────────
   it('Step 7: Insert probe -> saves, NO 403', async () => {
-    // Find the response_to_name attribute
+    // Find an active attribute
     const { data: attrs } = await sb
       .from('attributes')
       .select('id')
       .eq('active', true)
       .limit(1);
 
-    // Use any active attribute (RTN may or may not exist)
+    // Use any active attribute
     const attributeId = attrs?.[0]?.id;
     expect(attributeId).toBeTruthy();
 

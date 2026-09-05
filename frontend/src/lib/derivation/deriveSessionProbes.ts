@@ -13,23 +13,11 @@ import { supabase } from '../supabase';
 
 // Milestone definitions per attribute
 const MILESTONE_DEFS: Record<string, { key: string; check: (raw: Record<string, unknown>) => boolean }[]> = {
-  response_to_name: [
-    {
-      key: 'first_orient',
-      check: (raw) => raw.orientation === 'looked',
-    },
-    // first_orient_mother: requires caller=mother data — not yet captured, skip for now
-  ],
 };
 
 // Personal-best metric definitions per attribute
 // direction: 'lower' = smaller is better (latency), 'higher' = bigger is better (duration)
 const PERSONAL_BEST_DEFS: Record<string, { metric: string; rawKey: string; direction: 'lower' | 'higher'; marginConfigKey: string }[]> = {
-  // SHELVED: latency unreliable until occlusion-robust tracking. Re-enable when detection
-  // tracks through the head-turn. Count-based milestones/totals only for v1.
-  // response_to_name: [
-  //   { metric: 'fastest_latency_ms', rawKey: 'latency_ms', direction: 'lower', marginConfigKey: 'best_margin_ms' },
-  // ],
   looks_at_you: [
     { metric: 'longest_duration_ms', rawKey: 'duration_ms', direction: 'higher', marginConfigKey: 'best_margin_ms' },
   ],

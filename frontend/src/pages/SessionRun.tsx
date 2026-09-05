@@ -17,6 +17,7 @@ import { useCreateSessionEvent } from '../lib/queries/sessionEvents';
 import { useRecommendPlan, useAcceptPlan } from '../lib/queries/planRecommender';
 import { useToast } from '../lib/toastStore';
 import { CVPipeline } from '../cv/CVPipeline';
+import type { CVMetrics } from '../cv/CVPipeline';
 import CVCanvas from '../components/session/CVCanvas';
 import { CVAdapter, computeCompositeScore } from '../lib/measurement/cvAdapter';
 import { useAttributeConfig, useChildPersonalBests } from '../lib/queries/attributes';
@@ -459,7 +460,7 @@ export default function SessionRun() {
   }
 
   async function handleRecordTrial(response: TrialResponse | null): Promise<boolean> {
-    if (isPaused || !currentActivity) {
+    if (isPaused || !currentActivity || !sessionId) {
       if (isDebugMode) {
         console.debug('[SessionRun] response ignored', {
           response,

@@ -5,14 +5,10 @@ import { format, subDays } from 'date-fns';
 import { useChild } from '../lib/queries/children';
 import { useAuth } from '../hooks/useAuth';
 import { useMilestones, useBaselines, useAllAttributes } from '../lib/queries/progress';
-import { useProbesForDateRange } from '../lib/queries/probes';
 import Skeleton from '../components/Skeleton';
 import Button from '../components/Button';
-import { FaceLookingAway, FaceLookingAtYou } from '../components/progress/FaceSvgs';
 
 const BRAND = '#6260D6';
-const ROSE = '#E76F8E';
-const SERIF = "'Fraunces', Georgia, serif";
 
 interface AttributeData {
   attributeId: string;
@@ -45,21 +41,9 @@ export default function ChildProgress() {
   // Milestones are ALL-TIME (a "first" is a first regardless of window)
   const { data: milestones } = useMilestones(childId);
   // Totals for the selected date range only
-  const { data: periodProbes } = useProbesForDateRange(childId, 'response_to_name', periodStart, periodEnd);
   // Clinical record only — baselines are NOT rendered on the parent report (can regress)
   const { data: baselines } = useBaselines(childId);
   const { data: attributes } = useAllAttributes();
-
-  // Period totals from windowed probes (confirmed + valid only)
-  const periodTotals = useMemo(() => {
-    if (!periodProbes) return { looked: 0, total: 0 };
-    const confirmed = periodProbes.filter((p) => p.therapist_confirmed && p.valid);
-    const looked = confirmed.filter((p) => {
-      const raw = p.raw as Record<string, unknown>;
-      return raw?.orientation === 'looked';
-    });
-    return { looked: looked.length, total: confirmed.length };
-  }, [periodProbes]);
 
   // Build per-attribute data, filtered to those with real data
   const attrData = useMemo(() => {
@@ -86,13 +70,6 @@ export default function ChildProgress() {
       }
     }
 
-    // Set period totals for response_to_name
-    const rtn = attrMap.get('response_to_name');
-    if (rtn) {
-      rtn.periodLookedCount = periodTotals.looked;
-      rtn.periodProbeCount = periodTotals.total;
-    }
-
     for (const b of baselines ?? []) {
       const entry = attrMap.get(b.attribute_id);
       if (entry) {
@@ -105,7 +82,7 @@ export default function ChildProgress() {
     return [...attrMap.values()]
       .filter((a) => Object.keys(a.milestones).length > 0 || a.periodProbeCount > 0)
       .sort((a, b) => a.sortOrder - b.sortOrder);
-  }, [attributes, milestones, periodTotals, baselines]);
+  }, [attributes, milestones, baselines]);
 
   const childName = child?.full_name?.split(' ')[0] ?? '';
 
@@ -245,7 +222,7 @@ export default function ChildProgress() {
         )}
 
         {attrData.map((attr) => (
-          <AttributeCard key={attr.attributeId} attr={attr} childName={childName} t={t} />
+          <AttributeCard key={attr.attributeId} attr={attr} t={t} />
         ))}
 
         {/* Honesty line */}
@@ -269,88 +246,13 @@ export default function ChildProgress() {
   );
 }
 
-function AttributeCard({ attr, childName, t }: { attr: AttributeData; childName: string; t: (k: string, opts?: Record<string, unknown>) => string }) {
-  if (attr.attributeId === 'response_to_name') {
-    return <ResponseToNameCard attr={attr} childName={childName} t={t} />;
-  }
+function AttributeCard({ attr, t }: { attr: AttributeData; t: (k: string, opts?: Record<string, unknown>) => string }) {
   return (
     <div className="rounded-2xl p-5" style={{ backgroundColor: '#FFF', border: '1px solid #EBEBF0', boxShadow: '0 1px 3px rgba(230,230,235,0.4)' }}>
       <p className="text-[11px] font-semibold tracking-wider uppercase mb-3" style={{ color: BRAND }}>{attr.parentLabel}</p>
       <p className="text-[15px]" style={{ color: '#1B1B2E' }}>
         {t('progress_generic_total', { count: attr.periodLookedCount, total: attr.periodProbeCount })}
       </p>
-    </div>
-  );
-}
-
-function ResponseToNameCard({ attr, childName, t }: { attr: AttributeData; childName: string; t: (k: string, opts?: Record<string, unknown>) => string }) {
-  const firstOrient = attr.milestones['first_orient'];
-  const hasData = attr.periodProbeCount > 0;
-
-  return (
-    <div className="rounded-2xl overflow-hidden" style={{ backgroundColor: '#FFF', border: '1px solid #EBEBF0', boxShadow: '0 2px 12px rgba(98,96,214,0.10)' }}>
-
-      {/* Label */}
-      <div className="px-6 pt-6 pb-0">
-        <p className="text-[11px] font-bold tracking-widest uppercase" style={{ color: BRAND }}>
-          {attr.parentLabel}
-        </p>
-      </div>
-
-      {/* Two-faces visual */}
-      <div className="flex items-start justify-center gap-6 pt-6 pb-2 px-6">
-        <div className="text-center">
-          <FaceLookingAway size={68} />
-          <p className="text-[10px] mt-2 font-semibold tracking-wide" style={{ color: '#B0B0BC' }}>
-            {t('progress_rtn_face_away')}
-          </p>
-        </div>
-        <div className="pt-5 text-[20px] font-bold" style={{ color: BRAND }}>→</div>
-        <div className="text-center">
-          <FaceLookingAtYou size={68} />
-          <p className="text-[10px] mt-0 font-semibold tracking-wide" style={{ color: ROSE }}>
-            {t('progress_rtn_face_toward')}
-          </p>
-        </div>
-      </div>
-
-      {/* Hero milestone — ALL-TIME, not windowed */}
-      <div className="px-6 py-4">
-        {firstOrient ? (
-          <div className="rounded-xl px-5 py-5" style={{ backgroundColor: '#F5F3FF' }}>
-            <p className="text-[20px] leading-snug font-semibold" style={{ fontFamily: SERIF, color: '#1B1B2E' }}>
-              {t('progress_rtn_hero_milestone', { name: childName })}
-            </p>
-            <p className="text-[14px] mt-2 font-semibold" style={{ color: BRAND }}>
-              {format(new Date(firstOrient.achievedAt), 'd MMMM yyyy')}
-            </p>
-          </div>
-        ) : (
-          <div className="rounded-xl px-5 py-5" style={{ backgroundColor: '#F5F3FF' }}>
-            <p className="text-[20px] leading-snug font-semibold" style={{ fontFamily: SERIF, color: '#1B1B2E' }}>
-              {t('progress_rtn_hero_growing', { name: childName })}
-            </p>
-          </div>
-        )}
-      </div>
-
-      {/* Period total — monotonic count for the selected range */}
-      <div className="px-6 py-5" style={{ borderTop: '1px solid #F0F0F5', background: 'linear-gradient(180deg, #FAFAFF 0%, #FFF 100%)' }}>
-        {hasData ? (
-          <div className="flex items-baseline gap-3">
-            <span className="leading-none" style={{ fontSize: 48, fontWeight: 800, fontFamily: SERIF, color: BRAND, fontFeatureSettings: '"tnum"' }}>
-              {attr.periodLookedCount}
-            </span>
-            <span className="text-[14px] leading-snug" style={{ color: '#5E5E7A' }}>
-              {t('progress_rtn_total_period')}
-            </span>
-          </div>
-        ) : (
-          <p className="text-[14px] py-2" style={{ color: '#A0A0B0' }}>
-            {t('progress_rtn_no_data_period')}
-          </p>
-        )}
-      </div>
     </div>
   );
 }

@@ -98,7 +98,7 @@ export function useActivityLookup(ids: string[]) {
 export const SIGNAL_BUCKETS = [
   {
     bucketId: 'cam_face',
-    attributeIds: ['looks_at_you', 'stays_activity', 'response_to_name'],
+    attributeIds: ['looks_at_you', 'stays_activity'],
   },
   {
     bucketId: 'cam_hands',
