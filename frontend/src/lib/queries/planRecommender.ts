@@ -5,6 +5,85 @@ import type { RecommenderInput, PlanOutput, RecommendedActivity } from '../planR
 import type { Database } from '../../types/supabase';
 
 type PlanOrigin = Database['public']['Enums']['plan_origin'];
+const AI_GENERATOR_VERSION = 'recommender-ai-sarvam-105b-v1';
+
+// Try to invoke Sarvam AI recommendation engine; fall back to rule-based on failure
+async function tryAIRecommendation(
+  input: RecommenderInput,
+): Promise<{ suggestedBy: 'ai_engine' | 'rule_fallback'; activityIds: string[]; reason?: string } | null> {
+  try {
+    const { data, error } = await supabase.functions.invoke('recommend-plan-ai', {
+      body: {
+        intakeAnswers: input.intakeOutputs,
+        sessionDurationMinutes: input.durationMinutes,
+        candidateActivities: input.allActivities.map((a) => ({
+          id: a.id,
+          title: a.name,
+          category: a.developmental_domain,
+          targetCondition: a.diagnostic_profile_applicability.join(','),
+          durationMinutes: a.duration_minutes,
+        })),
+      },
+    });
+
+    if (error) {
+      console.warn('[AI Recommender] Supabase function error:', error.message);
+      return null;
+    }
+
+    if (data && data.success && data.suggestedBy === 'ai_engine' && Array.isArray(data.recommendations) && data.recommendations.length > 0) {
+      console.info('[AI Recommender] Success:', data.recommendations.length, 'activities recommended');
+      return {
+        suggestedBy: 'ai_engine',
+        activityIds: data.recommendations.map((r: { activityId: string }) => r.activityId),
+      };
+    }
+
+    if (data?.reason) {
+      console.info('[AI Recommender] Falling back to rule engine. Reason:', data.reason);
+    }
+    return null;
+  } catch (err) {
+    console.error('[AI Recommender] Exception during invocation:', err);
+    return null;
+  }
+}
+
+// The AI is allowed to choose and prioritize only catalog IDs. This turns those
+// validated selections into the same PlanOutput consumed by the review flow.
+function buildAIPlan(input: RecommenderInput, activityIds: string[]): PlanOutput | null {
+  const activitiesById = new Map(input.allActivities.map((activity) => [activity.id, activity]));
+  const selected = [] as RecommendedActivity[];
+  let totalDurationMinutes = 0;
+
+  for (const activityId of activityIds) {
+    const activity = activitiesById.get(activityId);
+    if (!activity || totalDurationMinutes + activity.duration_minutes > input.durationMinutes) continue;
+
+    const matchingGoal = input.activeGoals.find((goal) => goal.target_domain === activity.developmental_domain);
+    selected.push({
+      activityId,
+      goalId: matchingGoal?.id ?? null,
+      sequenceIndex: selected.length,
+      durationMinutes: activity.duration_minutes,
+      rationale: [{
+        key: 'rationale_skill_match',
+        values: { domain: activity.developmental_domain, level: activity.skill_level },
+      }],
+    });
+    totalDurationMinutes += activity.duration_minutes;
+  }
+
+  if (selected.length === 0) return null;
+
+  return {
+    activities: selected,
+    generatorVersion: AI_GENERATOR_VERSION,
+    totalDurationMinutes,
+    fallbackUsed: false,
+    activityNames: Object.fromEntries(input.allActivities.map((activity) => [activity.id, activity.name])),
+  };
+}
 
 export function useRecommendPlan(
   sessionId: string | undefined,
@@ -99,6 +178,19 @@ export function useRecommendPlan(
         sessionDisciplineId: sessionDisciplineId ?? null,
       };
 
+      // Try AI recommendation first; fall back to rule-based if it fails
+      const aiResult = await tryAIRecommendation(input);
+      if (aiResult && aiResult.suggestedBy === 'ai_engine') {
+        const aiPlan = buildAIPlan(input, aiResult.activityIds);
+        if (aiPlan) {
+          console.info('[Recommendation] Using AI engine. Generator version:', AI_GENERATOR_VERSION);
+          return aiPlan;
+        }
+        console.warn('[AI Recommender] AI selections did not fit the session duration; using rule-based fallback.');
+      }
+
+      // Fallback to rule-based
+      console.info('[Recommendation] Using rule-based fallback. Generator version: recommender-v1');
       return generatePlan(input);
     },
     enabled: !!sessionId && !!childId,
