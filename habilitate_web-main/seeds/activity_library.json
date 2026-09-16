@@ -1,0 +1,3260 @@
+{
+  "version": "1.0.0-draft",
+  "generated_at": "2026-05-21T17:18:14.502163",
+  "purpose": "Habilitate V1 demo activity library. STRUCTURED FROM established frameworks (ESDM, Hanen, NDBI, PECS, DIR/Floortime, Barkley ADHD, VB-MAPP) for engineering scaffolding and funding committee demo. ALL activities are flagged 'draft_pending_clinical_validation' and MUST be reviewed by the Chief Clinical Officer and qualified hired professionals before deployment to any child.",
+  "validation_status_global": "draft_pending_clinical_validation",
+  "framework_citations": {
+    "ESDM": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+    "HANEN": "Pepper & Weitzman (2004). It Takes Two to Talk: A Practical Guide for Parents. Hanen Centre Publication.",
+    "NDBI": "Schreibman et al. (2015). Naturalistic Developmental Behavioral Interventions: Empirically Validated Treatments for Autism Spectrum Disorder. Journal of Autism and Developmental Disorders, 45(8).",
+    "PECS": "Frost & Bondy (2002). The Picture Exchange Communication System Training Manual (2nd ed.). Pyramid Educational Consultants.",
+    "DIR": "Greenspan & Wieder (2006). Engaging Autism: Using the Floortime Approach to Help Children Relate, Communicate, and Think. Da Capo Press.",
+    "BARKLEY_ADHD": "Barkley (2013). Defiant Children: A Clinician's Manual for Assessment and Parent Training (3rd ed.). Guilford Press.",
+    "VBMAPP": "Sundberg (2008). Verbal Behavior Milestones Assessment and Placement Program. AVB Press."
+  },
+  "total_activities": 100,
+  "domains_covered": [
+    "attention_executive",
+    "expressive_language",
+    "joint_attention",
+    "motor_imitation",
+    "play_skills",
+    "receptive_language",
+    "self_regulation",
+    "social_reciprocity"
+  ],
+  "diagnostic_profiles_covered": [
+    "autism",
+    "speech_delay",
+    "adhd"
+  ],
+  "skill_levels": [
+    "emerging",
+    "established",
+    "mastery"
+  ],
+  "activities": [
+    {
+      "id": "ACT-0001",
+      "name": "Face-to-Face Bubble Play",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "joint_attention",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 36
+      },
+      "duration_minutes": 5,
+      "materials_required": [
+        "bubble solution",
+        "bubble wand"
+      ],
+      "prompting_hierarchy": [
+        "physical guidance to face position",
+        "verbal cue 'look'",
+        "model gaze shift",
+        "independent"
+      ],
+      "mastery_criteria": "Child orients to therapist's face within 3 seconds of name call, across 8 of 10 opportunities, in 3 consecutive sessions",
+      "therapist_steps": [
+        "Sit at child's eye level, 18-24 inches away",
+        "Hold bubble wand near your face, not the child's",
+        "Pause and wait for child to look at your face before blowing",
+        "If no look in 5 seconds, call name once, then blow regardless",
+        "Capture: did child orient to face before bubble?"
+      ],
+      "parent_explanation": {
+        "english": "We use bubbles to invite your child to look at the therapist's face. Joint attention — sharing a moment with another person — is the foundation skill for language and social learning. When your child looks at us before we blow a bubble, they are practicing the brain pathway that will later let them follow a conversation.",
+        "hindi": "हम बुलबुलों का उपयोग करते हैं ताकि आपका बच्चा थेरेपिस्ट के चेहरे की ओर देखे। संयुक्त ध्यान — किसी और के साथ एक पल साझा करना — भाषा और सामाजिक सीखने की नींव है। जब आपका बच्चा बुलबुला फूंकने से पहले हमारी ओर देखता है, तो वह वह कौशल सीख रहा है जो बाद में बातचीत समझने में मदद करेगा।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0002",
+      "name": "Shared Book Looking",
+      "framework_source": "HANEN",
+      "framework_citation": "Pepper & Weitzman (2004). It Takes Two to Talk: A Practical Guide for Parents. Hanen Centre Publication.",
+      "developmental_domain": "joint_attention",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 12,
+        "max": 36
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "board book with high-contrast pictures"
+      ],
+      "prompting_hierarchy": [
+        "point to picture and tap",
+        "model looking",
+        "verbal label",
+        "independent"
+      ],
+      "mastery_criteria": "Child looks at the picture the therapist points to within 3 seconds, 8 of 10 trials, across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Looking at a book together builds the skill of following someone else's attention — a foundation skill for learning. We point, your child looks where we point, we both look at the same thing. This is how children learn that adults can show them interesting things.",
+        "hindi": "साथ में किताब देखना दूसरे की ओर ध्यान देने का कौशल बनाता है — सीखने का आधार। हम इशारा करते हैं, आपका बच्चा वहीं देखता है, हम दोनों एक ही चीज़ देखते हैं। इसी तरह बच्चे सीखते हैं कि बड़े उन्हें रोचक चीज़ें दिखा सकते हैं।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0003",
+      "name": "Pop-Up Toy Anticipation",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "joint_attention",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 36
+      },
+      "duration_minutes": 5,
+      "materials_required": [
+        "jack-in-the-box or pop-up toy"
+      ],
+      "prompting_hierarchy": [
+        "physical assist to wind",
+        "model anticipatory face",
+        "independent"
+      ],
+      "mastery_criteria": "Child looks at therapist's face during pause before pop-up, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "We build up to the surprise of a pop-up toy and pause right before it pops. Your child learns to look at the therapist's face to find out when the fun thing will happen. This builds the back-and-forth pattern of social interaction.",
+        "hindi": "हम पॉप-अप खिलौने के आश्चर्य तक बनाते हैं और उससे ठीक पहले रुकते हैं। आपका बच्चा सीखता है कि मज़ेदार चीज़ कब होगी, यह जानने के लिए थेरेपिस्ट के चेहरे की ओर देखे। यह सामाजिक बातचीत का आगे-पीछे का पैटर्न बनाता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0004",
+      "name": "Pointing to Request (Proto-Imperative)",
+      "framework_source": "NDBI",
+      "framework_citation": "Schreibman et al. (2015). Naturalistic Developmental Behavioral Interventions: Empirically Validated Treatments for Autism Spectrum Disorder. Journal of Autism and Developmental Disorders, 45(8).",
+      "developmental_domain": "joint_attention",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 36
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "3 desired items placed out of reach"
+      ],
+      "prompting_hierarchy": [
+        "hand-over-hand point",
+        "model point",
+        "verbal cue 'show me'",
+        "independent"
+      ],
+      "mastery_criteria": "Child points to a desired item to request it, 8 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child learns to point at things they want, instead of crying or pulling someone's hand. Pointing is one of the earliest forms of communication — it tells us 'I want that' without needing words. This is the bridge to first words.",
+        "hindi": "आपका बच्चा रोने या किसी का हाथ खींचने के बजाय जो चाहता है उसकी ओर इशारा करना सीखता है। इशारा करना सबसे शुरुआती संचार का रूप है — यह बिना शब्दों के बताता है 'मुझे वह चाहिए'। यह पहले शब्दों तक का पुल है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0005",
+      "name": "Showing Objects to Adults",
+      "framework_source": "NDBI",
+      "framework_citation": "Schreibman et al. (2015). Naturalistic Developmental Behavioral Interventions: Empirically Validated Treatments for Autism Spectrum Disorder. Journal of Autism and Developmental Disorders, 45(8).",
+      "developmental_domain": "joint_attention",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 24,
+        "max": 48
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "interesting small objects"
+      ],
+      "prompting_hierarchy": [
+        "physical guidance to lift object toward adult",
+        "model showing",
+        "verbal cue 'show me'",
+        "independent"
+      ],
+      "mastery_criteria": "Child spontaneously holds up an object to show the therapist with eye contact, 6 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "When your child finds something interesting, they learn to hold it up and show it to us — not because they want help with it, but because they want to share the experience. This is called proto-declarative attention and it is a major leap in social communication.",
+        "hindi": "जब आपके बच्चे को कुछ रोचक मिलता है, तो वे सीखते हैं कि उसे ऊपर उठाकर हमें दिखाएं — मदद माँगने के लिए नहीं, बल्कि अनुभव साझा करने के लिए। यह सामाजिक संचार में एक बड़ी छलांग है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0006",
+      "name": "Gaze Following to Pointed Object",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "joint_attention",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 36
+      },
+      "duration_minutes": 5,
+      "materials_required": [
+        "2-3 visually interesting objects in room"
+      ],
+      "prompting_hierarchy": [
+        "exaggerated point with verbal cue",
+        "tap object after pointing",
+        "independent"
+      ],
+      "mastery_criteria": "Child follows therapist's point to an out-of-reach object, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "When we point to something across the room, your child learns to follow our finger and look at what we are showing. This is how children learn vocabulary from their environment — they have to look at what adults are talking about.",
+        "hindi": "जब हम कमरे के दूसरी ओर किसी चीज़ की ओर इशारा करते हैं, तो आपका बच्चा हमारी उंगली का अनुसरण करना और हम जो दिखा रहे हैं उसे देखना सीखता है। इसी तरह बच्चे अपने आसपास से शब्द सीखते हैं।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0007",
+      "name": "Three-Point Gaze Shift",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "joint_attention",
+      "diagnostic_profile_applicability": [
+        "autism"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 24,
+        "max": 48
+      },
+      "duration_minutes": 6,
+      "materials_required": [
+        "interesting toy"
+      ],
+      "prompting_hierarchy": [
+        "pause and wait",
+        "model the shift",
+        "independent"
+      ],
+      "mastery_criteria": "Child shifts gaze from object → therapist face → object during shared play, 8 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child learns the three-way looking pattern: look at the toy, look at the therapist's face, look back at the toy. This shows they are sharing the experience with another person, not just playing alone. This is one of the most important markers of social development.",
+        "hindi": "आपका बच्चा तीन-तरफ़ा देखने का पैटर्न सीखता है: खिलौने को देखें, थेरेपिस्ट के चेहरे को देखें, फिर खिलौने को देखें। यह दिखाता है कि वे किसी और के साथ अनुभव साझा कर रहे हैं, अकेले नहीं खेल रहे।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0008",
+      "name": "Joint Attention with Books (Pointing to Named)",
+      "framework_source": "HANEN",
+      "framework_citation": "Pepper & Weitzman (2004). It Takes Two to Talk: A Practical Guide for Parents. Hanen Centre Publication.",
+      "developmental_domain": "joint_attention",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 24,
+        "max": 48
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "picture book with clear named items"
+      ],
+      "prompting_hierarchy": [
+        "model point and label",
+        "verbal 'where is the dog?'",
+        "independent"
+      ],
+      "mastery_criteria": "Child points to named item in book, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "We name a picture and ask your child to point to it. This builds both their understanding of words and the shared-looking skill. Books are one of the most powerful tools for building joint attention because they give us a shared focus.",
+        "hindi": "हम एक तस्वीर का नाम बताते हैं और आपके बच्चे से उसकी ओर इशारा करने को कहते हैं। यह उनकी शब्दों की समझ और साझा देखने का कौशल दोनों बनाता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0009",
+      "name": "Initiating Joint Attention with Comments",
+      "framework_source": "NDBI",
+      "framework_citation": "Schreibman et al. (2015). Naturalistic Developmental Behavioral Interventions: Empirically Validated Treatments for Autism Spectrum Disorder. Journal of Autism and Developmental Disorders, 45(8).",
+      "developmental_domain": "joint_attention",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 60
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "novel object or event in environment"
+      ],
+      "prompting_hierarchy": [
+        "expectant pause",
+        "model the comment",
+        "independent"
+      ],
+      "mastery_criteria": "Child spontaneously initiates joint attention by commenting (verbal or gestural) on something interesting, 5 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "At this stage, your child sees something interesting and on their own draws our attention to it — by pointing and saying 'look!' or 'plane!' This is mature joint attention and it shows they understand sharing experiences with others is enjoyable.",
+        "hindi": "इस चरण में, आपका बच्चा कुछ रोचक देखता है और अपने आप हमारा ध्यान उस ओर खींचता है — इशारा करके और कहकर 'देखो!' या 'हवाई जहाज़!' यह परिपक्व संयुक्त ध्यान है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0010",
+      "name": "Responding to Joint Attention Bids",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "joint_attention",
+      "diagnostic_profile_applicability": [
+        "autism"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 30,
+        "max": 60
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "varied environmental cues"
+      ],
+      "prompting_hierarchy": [
+        "repeat bid",
+        "tap object",
+        "independent"
+      ],
+      "mastery_criteria": "Child responds appropriately to therapist's joint attention bid (pointing, looking, commenting) within 3 seconds, 8 of 10 opportunities",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "When the therapist points at something or says 'look at that!', your child responds appropriately every time — by looking, commenting, or asking about it. This shows your child has integrated the social pattern of sharing attention.",
+        "hindi": "जब थेरेपिस्ट किसी चीज़ की ओर इशारा करते हैं या कहते हैं 'वो देखो!', तो आपका बच्चा हर बार उचित रूप से प्रतिक्रिया देता है — देखकर, टिप्पणी करके, या उसके बारे में पूछकर।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0011",
+      "name": "Coordinated Attention During Snack",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "joint_attention",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 36
+      },
+      "duration_minutes": 5,
+      "materials_required": [
+        "preferred snack items in clear container"
+      ],
+      "prompting_hierarchy": [
+        "hold near face",
+        "wait",
+        "verbal cue"
+      ],
+      "mastery_criteria": "Child looks at therapist's face when requesting snack, 8 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "During snack time, the therapist holds the snack near their face so that when your child wants it, they have to look at the face. This naturally builds the eye-contact-while-requesting pattern that we use in normal conversation.",
+        "hindi": "नाश्ते के समय, थेरेपिस्ट नाश्ते को अपने चेहरे के पास रखते हैं ताकि जब आपके बच्चे को वह चाहिए हो, तो उसे चेहरे की ओर देखना पड़े।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0012",
+      "name": "Mirror Play for Self-Other Awareness",
+      "framework_source": "DIR",
+      "framework_citation": "Greenspan & Wieder (2006). Engaging Autism: Using the Floortime Approach to Help Children Relate, Communicate, and Think. Da Capo Press.",
+      "developmental_domain": "joint_attention",
+      "diagnostic_profile_applicability": [
+        "autism"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 36
+      },
+      "duration_minutes": 5,
+      "materials_required": [
+        "large mirror"
+      ],
+      "prompting_hierarchy": [
+        "point to reflection",
+        "tap own face then mirror",
+        "independent"
+      ],
+      "mastery_criteria": "Child looks at therapist's reflection in mirror and then turns to face the therapist, 6 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Mirror play helps your child understand that the person they see is also in the room with them. This builds the self-other awareness that joint attention is built on.",
+        "hindi": "दर्पण का खेल आपके बच्चे को समझने में मदद करता है कि वे जो व्यक्ति देखते हैं वह कमरे में भी है। यह आत्म-अन्य जागरूकता बनाता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0013",
+      "name": "Following Therapist's Gaze",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "joint_attention",
+      "diagnostic_profile_applicability": [
+        "autism"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 24,
+        "max": 48
+      },
+      "duration_minutes": 5,
+      "materials_required": [
+        "2-3 objects placed in different room locations"
+      ],
+      "prompting_hierarchy": [
+        "exaggerated head turn",
+        "verbal 'look over there'",
+        "independent"
+      ],
+      "mastery_criteria": "Child follows therapist's eye gaze (no point) to a target object, 6 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "At this level, your child learns to look where our eyes are looking — not just where we point. Following eye gaze is a sophisticated social skill that helps your child read what others are paying attention to.",
+        "hindi": "इस स्तर पर, आपका बच्चा सीखता है कि हम जहाँ अपनी आँखों से देख रहे हैं वहाँ देखे — सिर्फ़ जहाँ हम इशारा कर रहे हैं वहाँ नहीं।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0014",
+      "name": "Shared Wonder with Cause-Effect Toys",
+      "framework_source": "DIR",
+      "framework_citation": "Greenspan & Wieder (2006). Engaging Autism: Using the Floortime Approach to Help Children Relate, Communicate, and Think. Da Capo Press.",
+      "developmental_domain": "joint_attention",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 36
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "wind-up toys, light-up toys, music boxes"
+      ],
+      "prompting_hierarchy": [
+        "expressive face modeling",
+        "verbal exclamation",
+        "independent"
+      ],
+      "mastery_criteria": "Child looks at therapist with shared affect (smile, surprise) when toy activates, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "When something exciting happens with a toy, your child learns to look at the therapist and share the feeling — a smile, a surprised face. This emotional sharing is the heart of social connection and the foundation for relationships.",
+        "hindi": "जब किसी खिलौने के साथ कुछ रोमांचक होता है, तो आपका बच्चा सीखता है कि थेरेपिस्ट की ओर देखे और भावना साझा करे — मुस्कान, हैरानी का चेहरा।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0015",
+      "name": "Joint Attention During Multi-Step Activity",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "joint_attention",
+      "diagnostic_profile_applicability": [
+        "autism"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 60
+      },
+      "duration_minutes": 15,
+      "materials_required": [
+        "multi-step craft or puzzle"
+      ],
+      "prompting_hierarchy": [
+        "pause between steps",
+        "expectant look",
+        "independent"
+      ],
+      "mastery_criteria": "Child maintains joint attention with therapist across all steps of a 5-step activity, including looking up between steps to check in, in 3 of 4 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "During longer activities like a craft, your child stays connected with the therapist throughout — looking up between steps, sharing progress, checking in. This is the joint attention pattern that supports classroom learning.",
+        "hindi": "लंबी गतिविधियों के दौरान जैसे शिल्प, आपका बच्चा पूरे समय थेरेपिस्ट से जुड़ा रहता है — चरणों के बीच देखता है, प्रगति साझा करता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0016",
+      "name": "Following One-Step Familiar Commands",
+      "framework_source": "HANEN",
+      "framework_citation": "Pepper & Weitzman (2004). It Takes Two to Talk: A Practical Guide for Parents. Hanen Centre Publication.",
+      "developmental_domain": "receptive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 30
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "familiar objects in routine context"
+      ],
+      "prompting_hierarchy": [
+        "full physical",
+        "partial physical",
+        "gestural cue",
+        "independent"
+      ],
+      "mastery_criteria": "Child follows simple commands ('give me ball', 'sit down') without gestural support, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child learns to understand simple instructions like 'give me' or 'come here.' We start with familiar words and gradually reduce the gestures we use to help. Following instructions is the first big step in understanding spoken language.",
+        "hindi": "आपका बच्चा सरल निर्देश समझना सीखता है जैसे 'मुझे दो' या 'इधर आओ'। हम परिचित शब्दों से शुरू करते हैं और धीरे-धीरे इशारों की मदद कम करते हैं।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0017",
+      "name": "Object Identification (Receptive)",
+      "framework_source": "VBMAPP",
+      "framework_citation": "Sundberg (2008). Verbal Behavior Milestones Assessment and Placement Program. AVB Press.",
+      "developmental_domain": "receptive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 36
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "array of 3-5 common objects"
+      ],
+      "prompting_hierarchy": [
+        "point to target",
+        "tap target",
+        "verbal repeat",
+        "independent"
+      ],
+      "mastery_criteria": "Child touches the named object from a field of 3, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "We say the name of an object and your child finds it on the table. This builds the connection in their brain between a word and a thing. Once this connection is strong, they can start using those words to communicate.",
+        "hindi": "हम किसी वस्तु का नाम बताते हैं और आपका बच्चा उसे मेज़ पर ढूँढता है। यह उनके मस्तिष्क में किसी शब्द और चीज़ के बीच का संबंध बनाता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0018",
+      "name": "Body Parts Identification",
+      "framework_source": "VBMAPP",
+      "framework_citation": "Sundberg (2008). Verbal Behavior Milestones Assessment and Placement Program. AVB Press.",
+      "developmental_domain": "receptive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 36
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "mirror, doll, or simply child's own body"
+      ],
+      "prompting_hierarchy": [
+        "touch the part on yourself first",
+        "physical guidance to child's part",
+        "independent"
+      ],
+      "mastery_criteria": "Child correctly touches 5 named body parts on self, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child learns to point to body parts when we name them — nose, eyes, tummy. Body parts are easy to start with because they are always available and concrete. This builds early vocabulary understanding.",
+        "hindi": "आपका बच्चा शरीर के अंगों की ओर इशारा करना सीखता है जब हम उनके नाम बताते हैं — नाक, आँखें, पेट।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0019",
+      "name": "Action Word Comprehension",
+      "framework_source": "HANEN",
+      "framework_citation": "Pepper & Weitzman (2004). It Takes Two to Talk: A Practical Guide for Parents. Hanen Centre Publication.",
+      "developmental_domain": "receptive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 24,
+        "max": 42
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "dolls, action figures, household items"
+      ],
+      "prompting_hierarchy": [
+        "model the action",
+        "verbal repeat with emphasis",
+        "independent"
+      ],
+      "mastery_criteria": "Child performs or selects pictures of named actions (eat, sleep, jump, run, sit), 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Beyond naming things, your child now understands action words — eat, sleep, jump, run. These are critical because most of what we say in real conversation describes actions, not just objects.",
+        "hindi": "चीज़ों के नाम के अलावा, आपका बच्चा अब क्रिया शब्द भी समझता है — खाना, सोना, कूदना, दौड़ना।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0020",
+      "name": "Two-Step Related Commands",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "receptive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay",
+        "adhd"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 30,
+        "max": 48
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "familiar objects, container"
+      ],
+      "prompting_hierarchy": [
+        "model both steps",
+        "verbal with gesture",
+        "verbal only",
+        "independent"
+      ],
+      "mastery_criteria": "Child follows two-step related commands ('get the ball and put it in the box'), 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child can now hold two instructions in mind and do them in order. This is a big leap in working memory and language understanding — and it is exactly the skill they need for following classroom directions.",
+        "hindi": "आपका बच्चा अब दो निर्देश ध्यान में रख सकता है और उन्हें क्रम में कर सकता है। यह कक्षा के निर्देशों का पालन करने के लिए आवश्यक कौशल है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0021",
+      "name": "Spatial Concepts (In, On, Under)",
+      "framework_source": "VBMAPP",
+      "framework_citation": "Sundberg (2008). Verbal Behavior Milestones Assessment and Placement Program. AVB Press.",
+      "developmental_domain": "receptive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 30,
+        "max": 48
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "small object, box, table"
+      ],
+      "prompting_hierarchy": [
+        "physical model",
+        "gestural cue",
+        "independent"
+      ],
+      "mastery_criteria": "Child correctly places object based on spatial preposition (in, on, under, next to), 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "We teach position words like 'in,' 'on,' 'under.' Your child learns to put the ball in the box, on the box, or under the box. These small words carry big meaning and are essential for following more complex directions.",
+        "hindi": "हम स्थिति के शब्द सिखाते हैं जैसे 'में', 'पर', 'नीचे'। आपका बच्चा सीखता है कि गेंद को बक्से में, बक्से पर, या बक्से के नीचे रखे।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0022",
+      "name": "Identifying Function (What Do You Eat With?)",
+      "framework_source": "VBMAPP",
+      "framework_citation": "Sundberg (2008). Verbal Behavior Milestones Assessment and Placement Program. AVB Press.",
+      "developmental_domain": "receptive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 60
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "array of objects with clear functions"
+      ],
+      "prompting_hierarchy": [
+        "model the function",
+        "verbal cue",
+        "independent"
+      ],
+      "mastery_criteria": "Child selects correct object based on its function ('what do you eat with?', 'what do you wear?'), 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child learns to think about what objects are for, not just what they are called. When we ask 'what do you eat with?', they point to the spoon. This shows deeper understanding — they now categorize the world by use.",
+        "hindi": "आपका बच्चा सोचना सीखता है कि वस्तुएँ किसलिए हैं, सिर्फ़ उनके नाम नहीं। यह दिखाता है कि उनकी समझ गहरी हो रही है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0023",
+      "name": "Following Negation ('Don't Touch')",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "receptive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay",
+        "adhd"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 30,
+        "max": 48
+      },
+      "duration_minutes": 5,
+      "materials_required": [
+        "tempting objects"
+      ],
+      "prompting_hierarchy": [
+        "gesture stop",
+        "physical block gently",
+        "independent"
+      ],
+      "mastery_criteria": "Child stops or refrains from action when told 'don't' or 'no,' 8 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child learns to stop or not start an action when we say 'no' or 'don't.' Understanding negation is essential for safety, classroom rules, and following everyday instructions.",
+        "hindi": "आपका बच्चा सीखता है कि जब हम 'नहीं' या 'मत करो' कहते हैं तो रुक जाए। सुरक्षा और कक्षा के नियमों के लिए यह आवश्यक है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0024",
+      "name": "Color Identification (Receptive)",
+      "framework_source": "VBMAPP",
+      "framework_citation": "Sundberg (2008). Verbal Behavior Milestones Assessment and Placement Program. AVB Press.",
+      "developmental_domain": "receptive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 60
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "colored blocks or cards, primary colors"
+      ],
+      "prompting_hierarchy": [
+        "point to target color",
+        "tap color",
+        "independent"
+      ],
+      "mastery_criteria": "Child touches the named color from a field of 4, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child learns color names — red, blue, yellow, green. We start with just two colors and add more as they master them. Colors are useful for sorting, describing, and following instructions like 'bring me the red cup.'",
+        "hindi": "आपका बच्चा रंगों के नाम सीखता है — लाल, नीला, पीला, हरा। हम सिर्फ़ दो रंगों से शुरू करते हैं और महारत हासिल होने पर और जोड़ते हैं।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0025",
+      "name": "Following Three-Step Unrelated Commands",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "receptive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 42,
+        "max": 72
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "varied environmental objects"
+      ],
+      "prompting_hierarchy": [
+        "verbal repeat",
+        "visual list",
+        "independent"
+      ],
+      "mastery_criteria": "Child follows three-step unrelated commands ('stand up, clap, then sit'), 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child can now follow three different instructions in sequence — even when they aren't related. This is the working memory and language processing level needed for classroom group instruction.",
+        "hindi": "आपका बच्चा अब क्रम में तीन अलग-अलग निर्देशों का पालन कर सकता है — भले ही वे संबंधित न हों। यह कक्षा निर्देशों के लिए आवश्यक स्तर है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0026",
+      "name": "Identifying Quantity (One vs Many)",
+      "framework_source": "VBMAPP",
+      "framework_citation": "Sundberg (2008). Verbal Behavior Milestones Assessment and Placement Program. AVB Press.",
+      "developmental_domain": "receptive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 30,
+        "max": 48
+      },
+      "duration_minutes": 6,
+      "materials_required": [
+        "sets of small objects"
+      ],
+      "prompting_hierarchy": [
+        "model contrast",
+        "gestural cue",
+        "independent"
+      ],
+      "mastery_criteria": "Child differentiates 'one' vs 'many' and selects correctly, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child learns the concept of quantity — one block versus many blocks. This is the foundation for counting and number sense, which builds toward pre-academic skills.",
+        "hindi": "आपका बच्चा मात्रा की अवधारणा सीखता है — एक ब्लॉक बनाम कई ब्लॉक। यह गिनती और संख्या ज्ञान की नींव है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0027",
+      "name": "Understanding 'Who' Questions",
+      "framework_source": "HANEN",
+      "framework_citation": "Pepper & Weitzman (2004). It Takes Two to Talk: A Practical Guide for Parents. Hanen Centre Publication.",
+      "developmental_domain": "receptive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 60
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "family photo, picture book with people"
+      ],
+      "prompting_hierarchy": [
+        "point to person",
+        "name the person",
+        "independent"
+      ],
+      "mastery_criteria": "Child answers 'who is this?' by pointing or naming, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "When we ask 'who is this?', your child points to or names the right person. Understanding question words ('who,' 'what,' 'where') is essential for conversation and for school.",
+        "hindi": "जब हम पूछते हैं 'यह कौन है?', आपका बच्चा सही व्यक्ति की ओर इशारा करता है या नाम बताता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0028",
+      "name": "Following Conditional Commands",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "receptive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 42,
+        "max": 72
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "varied objects"
+      ],
+      "prompting_hierarchy": [
+        "restate condition",
+        "model decision",
+        "independent"
+      ],
+      "mastery_criteria": "Child follows 'if/then' commands ('if it is red, put it in the box'), 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child can now make decisions based on a condition — 'if it's red, put it in the box.' This shows complex language understanding and the kind of thinking needed for problem solving.",
+        "hindi": "आपका बच्चा अब किसी शर्त के आधार पर निर्णय ले सकता है — 'अगर लाल है, तो बक्से में डालो'।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0029",
+      "name": "Comprehension of Short Stories",
+      "framework_source": "HANEN",
+      "framework_citation": "Pepper & Weitzman (2004). It Takes Two to Talk: A Practical Guide for Parents. Hanen Centre Publication.",
+      "developmental_domain": "receptive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 48,
+        "max": 72
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "short illustrated story, 3-5 sentences"
+      ],
+      "prompting_hierarchy": [
+        "repeat key part",
+        "show picture",
+        "independent"
+      ],
+      "mastery_criteria": "Child answers basic comprehension questions about a short story (who, what, where), 8 of 10 questions across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "After hearing a short story, your child can answer questions about it. This is comprehension — the foundation of reading and of all classroom learning. We start with very short stories and build up.",
+        "hindi": "एक छोटी कहानी सुनने के बाद, आपका बच्चा उसके बारे में प्रश्नों के उत्तर दे सकता है। यह समझ है — पढ़ने और कक्षा सीखने की नींव।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0030",
+      "name": "Recognizing Own Name (Foundational)",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "receptive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 12,
+        "max": 24
+      },
+      "duration_minutes": 5,
+      "materials_required": [
+        "none needed"
+      ],
+      "prompting_hierarchy": [
+        "call from close range",
+        "tap shoulder while calling",
+        "call from distance",
+        "independent"
+      ],
+      "mastery_criteria": "Child orients to therapist within 3 seconds of name call, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Responding to their own name is one of the earliest receptive language skills. Many children with autism do not consistently respond to their name even when their hearing is fine. We practice this until the response is reliable.",
+        "hindi": "अपने नाम पर प्रतिक्रिया देना सबसे शुरुआती ग्रहणशील भाषा कौशल है। कई ऑटिज़्म वाले बच्चे अपने नाम पर लगातार प्रतिक्रिया नहीं देते भले ही उनकी सुनवाई ठीक हो।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0031",
+      "name": "Vocal Imitation (Sound Play)",
+      "framework_source": "HANEN",
+      "framework_citation": "Pepper & Weitzman (2004). It Takes Two to Talk: A Practical Guide for Parents. Hanen Centre Publication.",
+      "developmental_domain": "expressive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 12,
+        "max": 30
+      },
+      "duration_minutes": 6,
+      "materials_required": [
+        "bubbles, mirror, or fun objects to motivate vocalization"
+      ],
+      "prompting_hierarchy": [
+        "exaggerated face model",
+        "wait expectantly",
+        "vocal approximation acceptable"
+      ],
+      "mastery_criteria": "Child imitates a vocal sound (ba, ma, oo) within 5 seconds of model, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "We make playful sounds — 'ba ba ba,' 'oooh,' 'pop!' — and wait for your child to copy. Even an approximation counts. Imitating sounds is the bridge to imitating words, which is the bridge to speech.",
+        "hindi": "हम मज़ेदार आवाज़ें निकालते हैं — 'बा बा बा,' 'ओह!' — और आपके बच्चे के नकल करने का इंतज़ार करते हैं। यहाँ तक कि अनुमान भी गिना जाता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0032",
+      "name": "PECS Phase 1 - Picture Exchange for Highly Preferred Item",
+      "framework_source": "PECS",
+      "framework_citation": "Frost & Bondy (2002). The Picture Exchange Communication System Training Manual (2nd ed.). Pyramid Educational Consultants.",
+      "developmental_domain": "expressive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 24,
+        "max": 60
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "PECS-style picture cards",
+        "highly preferred snacks or toys"
+      ],
+      "prompting_hierarchy": [
+        "full physical assist to pick up and hand over picture",
+        "fade physical guidance",
+        "independent"
+      ],
+      "mastery_criteria": "Child independently picks up picture of desired item and places it in communication partner's open hand, 8 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child learns to give a picture of what they want in exchange for getting it. This works especially well for children who don't yet speak — they can communicate clearly using pictures. Many children begin speaking after starting PECS because the communication intention is finally being rewarded.",
+        "hindi": "आपका बच्चा जो चाहते हैं उसकी तस्वीर देना सीखता है। यह उन बच्चों के लिए विशेष रूप से अच्छा काम करता है जो अभी बोलते नहीं हैं — वे तस्वीरों का उपयोग करके स्पष्ट रूप से संवाद कर सकते हैं।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0033",
+      "name": "First Words - Requesting (Mand)",
+      "framework_source": "VBMAPP",
+      "framework_citation": "Sundberg (2008). Verbal Behavior Milestones Assessment and Placement Program. AVB Press.",
+      "developmental_domain": "expressive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 36
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "highly preferred items"
+      ],
+      "prompting_hierarchy": [
+        "full verbal model",
+        "partial sound prompt",
+        "wait expectantly",
+        "independent"
+      ],
+      "mastery_criteria": "Child says or approximates word for desired item ('ball,' 'juice,' 'open'), 8 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "The first words your child learns are words that get them what they want — 'ball,' 'juice,' 'more.' We motivate by having something they want, then waiting for them to ask. Even a close-sounding word counts. This is how speech becomes useful and motivating for them.",
+        "hindi": "आपका बच्चा जो पहले शब्द सीखता है वे शब्द हैं जो उसे वह दिलाते हैं जो वह चाहता है — 'गेंद,' 'जूस,' 'और'।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0034",
+      "name": "Imitating Single Words",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "expressive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 36
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "objects child is interested in"
+      ],
+      "prompting_hierarchy": [
+        "full word model",
+        "first sound prompt",
+        "independent"
+      ],
+      "mastery_criteria": "Child imitates 5+ single words on request, with at least approximate phonetic match, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child watches our mouth and tries to make the same sound. We start with words that are easy to say and that they want to say. Imitation is one of the fastest ways to build vocabulary.",
+        "hindi": "आपका बच्चा हमारे मुँह को देखता है और वही आवाज़ निकालने की कोशिश करता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0035",
+      "name": "Two-Word Combinations (Agent + Action)",
+      "framework_source": "HANEN",
+      "framework_citation": "Pepper & Weitzman (2004). It Takes Two to Talk: A Practical Guide for Parents. Hanen Centre Publication.",
+      "developmental_domain": "expressive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 24,
+        "max": 42
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "dolls, action figures, picture cards"
+      ],
+      "prompting_hierarchy": [
+        "model combination",
+        "expand single word",
+        "independent"
+      ],
+      "mastery_criteria": "Child produces two-word combinations ('mama go,' 'baby eat'), 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Once your child uses single words, we help them combine two — 'mama go,' 'baby eat,' 'big ball.' Two-word combinations are the first step toward sentences and show that language is becoming flexible, not just memorized words.",
+        "hindi": "एक बार जब आपका बच्चा एक शब्द का उपयोग करता है, तो हम उन्हें दो को जोड़ने में मदद करते हैं — 'मम्मा जाओ,' 'बच्चा खाए'।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0036",
+      "name": "PECS Phase 2 - Distance and Persistence",
+      "framework_source": "PECS",
+      "framework_citation": "Frost & Bondy (2002). The Picture Exchange Communication System Training Manual (2nd ed.). Pyramid Educational Consultants.",
+      "developmental_domain": "expressive_language",
+      "diagnostic_profile_applicability": [
+        "autism"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 24,
+        "max": 60
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "PECS book, motivating items at increasing distance"
+      ],
+      "prompting_hierarchy": [
+        "partial physical to retrieve picture",
+        "wait",
+        "independent"
+      ],
+      "mastery_criteria": "Child travels to PECS book, retrieves picture, travels to communication partner, hands picture over — 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child now travels across the room to get their picture book, finds the right picture, comes to find the therapist, and exchanges it. This teaches them that communication requires going to find a listener — a sophisticated social understanding.",
+        "hindi": "आपका बच्चा अब कमरे के पार जाकर अपनी तस्वीर पुस्तक लेता है, सही तस्वीर ढूँढता है, थेरेपिस्ट के पास आता है, और उसका आदान-प्रदान करता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0037",
+      "name": "Labeling (Tact) Familiar Objects",
+      "framework_source": "VBMAPP",
+      "framework_citation": "Sundberg (2008). Verbal Behavior Milestones Assessment and Placement Program. AVB Press.",
+      "developmental_domain": "expressive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 24,
+        "max": 42
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "picture cards or real objects, familiar items"
+      ],
+      "prompting_hierarchy": [
+        "echoic prompt (say word for them to repeat)",
+        "first sound prompt",
+        "independent"
+      ],
+      "mastery_criteria": "Child labels 15+ familiar objects when shown (without prompt), 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child names what they see — 'dog!' 'car!' 'apple!' — even when they don't want it, just because they recognize it. This is called labeling, and it shows they are building real vocabulary, not just learning to request.",
+        "hindi": "आपका बच्चा जो देखता है उसका नाम बताता है — 'कुत्ता!' 'कार!' 'सेब!' — भले ही उसे न चाहिए।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0038",
+      "name": "Answering Yes/No Questions",
+      "framework_source": "HANEN",
+      "framework_citation": "Pepper & Weitzman (2004). It Takes Two to Talk: A Practical Guide for Parents. Hanen Centre Publication.",
+      "developmental_domain": "expressive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 30,
+        "max": 48
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "preferred and non-preferred items"
+      ],
+      "prompting_hierarchy": [
+        "model head nod/shake",
+        "vocal model",
+        "independent"
+      ],
+      "mastery_criteria": "Child answers yes/no questions accurately based on preference, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child learns to answer 'yes' or 'no' to simple questions — 'do you want juice?' 'do you want spinach?' This gives them a way to express choice and is a key building block of conversation.",
+        "hindi": "आपका बच्चा सरल प्रश्नों का उत्तर 'हाँ' या 'नहीं' में देना सीखता है — 'क्या तुम्हें जूस चाहिए?'"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0039",
+      "name": "Three-Word Sentences",
+      "framework_source": "HANEN",
+      "framework_citation": "Pepper & Weitzman (2004). It Takes Two to Talk: A Practical Guide for Parents. Hanen Centre Publication.",
+      "developmental_domain": "expressive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 30,
+        "max": 48
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "picture cards, toys"
+      ],
+      "prompting_hierarchy": [
+        "model full sentence",
+        "partial sentence prompt",
+        "independent"
+      ],
+      "mastery_criteria": "Child produces three-word sentences ('I want juice,' 'mama sit chair'), 8 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child puts three words together — 'I want juice,' 'big red ball.' Three-word sentences show that real grammar is starting to develop, and they communicate much more clearly with the people around them.",
+        "hindi": "आपका बच्चा तीन शब्दों को एक साथ रखता है — 'मुझे जूस चाहिए,' 'बड़ी लाल गेंद'।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0040",
+      "name": "Answering 'What' Questions",
+      "framework_source": "VBMAPP",
+      "framework_citation": "Sundberg (2008). Verbal Behavior Milestones Assessment and Placement Program. AVB Press.",
+      "developmental_domain": "expressive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 30,
+        "max": 48
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "picture cards, real objects"
+      ],
+      "prompting_hierarchy": [
+        "echoic prompt",
+        "first sound prompt",
+        "independent"
+      ],
+      "mastery_criteria": "Child answers 'what is this?' with correct label, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "When asked 'what is this?', your child gives the correct name. This is the foundation of all answering — it teaches them that questions deserve specific answers, which is the heart of conversation.",
+        "hindi": "जब पूछा जाता है 'यह क्या है?', आपका बच्चा सही नाम देता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0041",
+      "name": "Answering 'Where' Questions",
+      "framework_source": "HANEN",
+      "framework_citation": "Pepper & Weitzman (2004). It Takes Two to Talk: A Practical Guide for Parents. Hanen Centre Publication.",
+      "developmental_domain": "expressive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 60
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "familiar room with known locations"
+      ],
+      "prompting_hierarchy": [
+        "point to location",
+        "first word prompt",
+        "independent"
+      ],
+      "mastery_criteria": "Child answers 'where is the ___?' by pointing to or naming the location, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child now answers 'where' questions — 'where is mama?' 'where is your shoe?' Location questions are more abstract than 'what' questions and show that your child is building a richer language understanding.",
+        "hindi": "आपका बच्चा अब 'कहाँ' प्रश्नों का उत्तर देता है — 'मम्मा कहाँ है?'"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0042",
+      "name": "Commenting (Sharing Observations)",
+      "framework_source": "HANEN",
+      "framework_citation": "Pepper & Weitzman (2004). It Takes Two to Talk: A Practical Guide for Parents. Hanen Centre Publication.",
+      "developmental_domain": "expressive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 60
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "novel or interesting items"
+      ],
+      "prompting_hierarchy": [
+        "model the comment",
+        "expectant pause",
+        "independent"
+      ],
+      "mastery_criteria": "Child spontaneously comments on observations ('big truck!' 'dog running'), 5 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child notices something and says something about it — not to ask for it, just to share. Commenting is a huge social milestone because it shows your child wants to talk to us about the world, not just get things from us.",
+        "hindi": "आपका बच्चा कुछ देखता है और उसके बारे में कुछ कहता है — माँगने के लिए नहीं, सिर्फ़ साझा करने के लिए।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0043",
+      "name": "Asking Questions ('What's That?')",
+      "framework_source": "HANEN",
+      "framework_citation": "Pepper & Weitzman (2004). It Takes Two to Talk: A Practical Guide for Parents. Hanen Centre Publication.",
+      "developmental_domain": "expressive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 60
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "novel or unfamiliar items"
+      ],
+      "prompting_hierarchy": [
+        "model the question",
+        "expectant pause with novel item",
+        "independent"
+      ],
+      "mastery_criteria": "Child spontaneously asks 'what is that?' or 'what?' when encountering novel items, 4 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child starts asking us questions — 'what's that?' 'where mama go?' When children begin asking questions, they have moved from just receiving language to actively using it to learn. This is a milestone moment.",
+        "hindi": "आपका बच्चा हमसे प्रश्न पूछना शुरू करता है — 'वह क्या है?' जब बच्चे प्रश्न पूछना शुरू करते हैं, तो वे केवल भाषा प्राप्त करने से सक्रिय रूप से सीखने के लिए उपयोग करने में चले गए हैं।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0044",
+      "name": "Describing with Adjectives",
+      "framework_source": "HANEN",
+      "framework_citation": "Pepper & Weitzman (2004). It Takes Two to Talk: A Practical Guide for Parents. Hanen Centre Publication.",
+      "developmental_domain": "expressive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 60
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "objects of contrasting features (big/small, hot/cold)"
+      ],
+      "prompting_hierarchy": [
+        "model adjective",
+        "contrast objects",
+        "independent"
+      ],
+      "mastery_criteria": "Child uses descriptive adjectives in phrases ('big ball,' 'hot tea'), 8 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child adds descriptive words — 'big ball,' 'hot tea,' 'red car.' Adjectives make language richer and more useful. They also help your child notice and describe the features of the world around them.",
+        "hindi": "आपका बच्चा वर्णनात्मक शब्द जोड़ता है — 'बड़ी गेंद,' 'गरम चाय'।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0045",
+      "name": "Telling a Simple Past Event",
+      "framework_source": "HANEN",
+      "framework_citation": "Pepper & Weitzman (2004). It Takes Two to Talk: A Practical Guide for Parents. Hanen Centre Publication.",
+      "developmental_domain": "expressive_language",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 48,
+        "max": 72
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "recent shared experience"
+      ],
+      "prompting_hierarchy": [
+        "leading question",
+        "picture reminder",
+        "fill-in-the-blank",
+        "independent"
+      ],
+      "mastery_criteria": "Child recounts a simple past event with 3+ pieces of information, 6 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child tells us about something that happened earlier — 'we went park,' 'I ate ice cream.' Talking about past events is sophisticated because it requires memory plus the language to share that memory. This is the foundation of conversation and storytelling.",
+        "hindi": "आपका बच्चा हमें पहले हुई किसी बात के बारे में बताता है — 'हम पार्क गए,' 'मैंने आइसक्रीम खाई'।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0046",
+      "name": "Gross Motor Imitation - Clap Hands",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "motor_imitation",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 12,
+        "max": 30
+      },
+      "duration_minutes": 5,
+      "materials_required": [
+        "none"
+      ],
+      "prompting_hierarchy": [
+        "hand-over-hand",
+        "physical model with verbal cue",
+        "independent"
+      ],
+      "mastery_criteria": "Child claps hands when therapist models the action, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child copies a simple movement — clapping hands. Motor imitation is one of the most important skills because it teaches the brain to copy what others do. Children who can imitate movements then learn to imitate sounds, then words.",
+        "hindi": "आपका बच्चा एक सरल गति की नकल करता है — ताली बजाना। मोटर अनुकरण सबसे महत्वपूर्ण कौशलों में से एक है क्योंकि यह मस्तिष्क को सिखाता है कि दूसरों जो करते हैं उसकी नकल करे।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0047",
+      "name": "Imitation with Objects - Banging",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "motor_imitation",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 12,
+        "max": 24
+      },
+      "duration_minutes": 5,
+      "materials_required": [
+        "two identical drums or shakers"
+      ],
+      "prompting_hierarchy": [
+        "hand-over-hand",
+        "physical model",
+        "independent"
+      ],
+      "mastery_criteria": "Child imitates banging a drum or shaking a rattle when therapist models, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "We bang a drum and your child copies us with their own drum. Imitating with objects teaches your child to watch what someone does and do the same — a skill they will use to learn everything from eating with a spoon to writing.",
+        "hindi": "हम ढोल बजाते हैं और आपका बच्चा अपने ढोल से हमारी नकल करता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0048",
+      "name": "Gross Motor Imitation - Body Actions",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "motor_imitation",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 36
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "none"
+      ],
+      "prompting_hierarchy": [
+        "physical model",
+        "verbal cue 'do this'",
+        "independent"
+      ],
+      "mastery_criteria": "Child imitates 5+ gross motor actions (stomp, jump, arms up, spin), 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child now imitates many different body actions — jumping, stomping, putting arms up. This expanding imitation repertoire is what allows them to learn songs, dances, and routines just by watching others.",
+        "hindi": "आपका बच्चा अब कई अलग-अलग शारीरिक क्रियाओं की नकल करता है — कूदना, पैर पटकना, हाथ ऊपर करना।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0049",
+      "name": "Fine Motor Imitation - Finger Actions",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "motor_imitation",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 24,
+        "max": 42
+      },
+      "duration_minutes": 5,
+      "materials_required": [
+        "none"
+      ],
+      "prompting_hierarchy": [
+        "shape child's fingers",
+        "exaggerated model",
+        "independent"
+      ],
+      "mastery_criteria": "Child imitates finger actions (pointer finger up, thumbs up, peace sign), 6 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Fine motor imitation is harder — making specific finger shapes. This skill develops the hand control your child needs for pointing, writing, and using utensils. It also strengthens the brain's connection between watching and doing.",
+        "hindi": "फाइन मोटर अनुकरण कठिन है — विशिष्ट उंगली के आकार बनाना। यह हाथ नियंत्रण विकसित करता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0050",
+      "name": "Oral Motor Imitation",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "motor_imitation",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 36
+      },
+      "duration_minutes": 5,
+      "materials_required": [
+        "mirror"
+      ],
+      "prompting_hierarchy": [
+        "physical assist to mouth",
+        "exaggerated model in mirror",
+        "independent"
+      ],
+      "mastery_criteria": "Child imitates 3+ mouth movements (open wide, tongue out, kiss face, blow), 6 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "We make funny mouth movements — tongue out, big O, kiss face — and your child copies. This builds the muscle control needed for speech and gives your child practice imitating with the parts of the body used for talking.",
+        "hindi": "हम मज़ेदार मुँह की हरकतें करते हैं और आपका बच्चा नकल करता है। यह बोलने के लिए आवश्यक मांसपेशी नियंत्रण बनाता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0051",
+      "name": "Imitating Play Schemes",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "motor_imitation",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 24,
+        "max": 48
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "two identical play sets (dolls + bottle, cars + ramp)"
+      ],
+      "prompting_hierarchy": [
+        "physical assist",
+        "model with narration",
+        "independent"
+      ],
+      "mastery_criteria": "Child imitates a 2-3 step play scheme (feed doll, then wipe mouth, then put down), 6 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child copies a small sequence of pretend play — feeding the doll, then wiping its mouth. This is the bridge from copying single actions to understanding play scripts and stories.",
+        "hindi": "आपका बच्चा नकली खेल के एक छोटे क्रम की नकल करता है — गुड़िया को खिलाना, फिर उसका मुँह पोंछना।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0052",
+      "name": "Imitation with Vocal Pairing",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "motor_imitation",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 36
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "objects with sound associations (car, animal toys)"
+      ],
+      "prompting_hierarchy": [
+        "model action + sound together",
+        "fade vocal model",
+        "independent"
+      ],
+      "mastery_criteria": "Child imitates action paired with sound ('vroom' while pushing car, 'moo' with cow), 6 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "When we push a car saying 'vroom,' your child does the same. Pairing movement with sound bridges motor imitation and vocal imitation — a key step in developing speech.",
+        "hindi": "जब हम 'वरूम' कहते हुए कार धकेलते हैं, आपका बच्चा भी ऐसा ही करता है। ध्वनि के साथ गति को जोड़ना मोटर अनुकरण और स्वर अनुकरण के बीच पुल है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0053",
+      "name": "Imitating Dance and Songs with Actions",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "motor_imitation",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 30,
+        "max": 48
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "familiar action songs (Itsy Bitsy Spider, Wheels on the Bus)"
+      ],
+      "prompting_hierarchy": [
+        "sing slowly with exaggerated actions",
+        "physical guidance",
+        "independent"
+      ],
+      "mastery_criteria": "Child imitates 5+ actions in a familiar action song from start to finish, in 3 of 4 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child can do all the hand and body movements of a familiar song. This shows they have learned a sequence by watching and remembering — exactly the skill they need for learning routines, classroom procedures, and self-care tasks.",
+        "hindi": "आपका बच्चा एक परिचित गीत की सभी हाथ और शरीर की गतिविधियाँ कर सकता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0054",
+      "name": "Imitating Multi-Step Object Sequences",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "motor_imitation",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 60
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "beads + string, blocks for tower, simple craft"
+      ],
+      "prompting_hierarchy": [
+        "demonstrate one step at a time",
+        "verbal narration",
+        "independent"
+      ],
+      "mastery_criteria": "Child imitates a 4-step object sequence (e.g., bead pattern, block tower), 6 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child can copy a sequence of 4+ steps with objects — like making a beaded necklace by watching us first. This is the imitation level needed for school activities like art and writing.",
+        "hindi": "आपका बच्चा वस्तुओं के साथ 4+ चरणों के क्रम की नकल कर सकता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0055",
+      "name": "Delayed Imitation",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "motor_imitation",
+      "diagnostic_profile_applicability": [
+        "autism"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 60
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "interesting object with novel use"
+      ],
+      "prompting_hierarchy": [
+        "demonstrate then put object away briefly",
+        "represent object",
+        "independent"
+      ],
+      "mastery_criteria": "Child imitates an action 30+ seconds after the model, with object reintroduced, 6 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child watches us do something, we put the object away for a moment, then we bring it back — and they remember what to do. Delayed imitation requires holding the model in memory, which is exactly the skill needed for following instructions later in school.",
+        "hindi": "आपका बच्चा देखता है कि हम कुछ करते हैं, हम वस्तु को कुछ क्षण के लिए हटा देते हैं, फिर वापस लाते हैं — और वे याद रखते हैं कि क्या करना है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0056",
+      "name": "Exploring Cause-Effect Toys",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "play_skills",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 12,
+        "max": 24
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "pop-up toy, busy box, sound buttons"
+      ],
+      "prompting_hierarchy": [
+        "hand-over-hand",
+        "model the action",
+        "independent"
+      ],
+      "mastery_criteria": "Child independently activates cause-effect toy and looks for the result, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child learns that their actions cause things to happen — press a button and music plays. Understanding cause and effect is a foundation for all learning and is what lets your child begin to control their world.",
+        "hindi": "आपका बच्चा सीखता है कि उनके कार्य चीज़ें होने का कारण बनते हैं — बटन दबाएँ और संगीत बजे।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0057",
+      "name": "Functional Play with Toys",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "play_skills",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 36
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "car, ball, cup, brush"
+      ],
+      "prompting_hierarchy": [
+        "model the use",
+        "physical guidance",
+        "independent"
+      ],
+      "mastery_criteria": "Child uses 5+ toys for their intended function (push car, roll ball, drink from cup), 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child uses toys the way they are meant to be used — pushing the car, rolling the ball, brushing the doll's hair. This is functional play and it shows your child understands what objects are for.",
+        "hindi": "आपका बच्चा खिलौनों का उपयोग उस तरीके से करता है जिस तरह से उनका उपयोग किया जाना चाहिए — कार धकेलना, गेंद लुढ़काना।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0058",
+      "name": "Pretend Play - Self-Directed",
+      "framework_source": "DIR",
+      "framework_citation": "Greenspan & Wieder (2006). Engaging Autism: Using the Floortime Approach to Help Children Relate, Communicate, and Think. Da Capo Press.",
+      "developmental_domain": "play_skills",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 24,
+        "max": 42
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "doll, toy food, cup, spoon"
+      ],
+      "prompting_hierarchy": [
+        "model pretend action",
+        "verbal cue 'eat'",
+        "independent"
+      ],
+      "mastery_criteria": "Child performs pretend actions on self (pretend eat from empty cup, pretend sleep), 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child pretends — drinks from an empty cup, pretends to sleep. Pretend play means your child can think about something that isn't actually happening. This is a huge cognitive leap and is closely connected with language development.",
+        "hindi": "आपका बच्चा बहाना करता है — खाली कप से पीता है, सोने का नाटक करता है। नाटक खेल का मतलब है कि आपका बच्चा कुछ ऐसा सोच सकता है जो वास्तव में नहीं हो रहा।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0059",
+      "name": "Pretend Play - Doll/Animal Directed",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "play_skills",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 24,
+        "max": 48
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "doll or stuffed animal, toy food, cup, bed"
+      ],
+      "prompting_hierarchy": [
+        "model action on doll",
+        "physical guidance",
+        "independent"
+      ],
+      "mastery_criteria": "Child performs pretend actions on doll/animal (feed, put to bed, brush), 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child pretends to feed, bathe, or put a doll to sleep. Acting on a doll is more abstract than acting on themselves and is the next step in symbolic thinking. It also lets them practice nurturing, which builds empathy.",
+        "hindi": "आपका बच्चा गुड़िया को खिलाने, नहलाने, या सुलाने का नाटक करता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0060",
+      "name": "Sequenced Pretend Play",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "play_skills",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 30,
+        "max": 48
+      },
+      "duration_minutes": 12,
+      "materials_required": [
+        "play kitchen, tea set, or doll care set"
+      ],
+      "prompting_hierarchy": [
+        "model sequence",
+        "verbal narration",
+        "independent"
+      ],
+      "mastery_criteria": "Child performs 3-step pretend sequence (cook → serve → eat), 6 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child plays out a small story — cook the food, put it on the plate, feed the doll. These play sequences mirror real-life routines and show your child can hold a plan in mind across several steps.",
+        "hindi": "आपका बच्चा एक छोटी कहानी खेलता है — खाना पकाओ, प्लेट पर रखो, गुड़िया को खिलाओ।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0061",
+      "name": "Symbolic Substitution",
+      "framework_source": "DIR",
+      "framework_citation": "Greenspan & Wieder (2006). Engaging Autism: Using the Floortime Approach to Help Children Relate, Communicate, and Think. Da Capo Press.",
+      "developmental_domain": "play_skills",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 60
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "neutral objects (blocks, sticks)"
+      ],
+      "prompting_hierarchy": [
+        "model substitution ('this is a phone')",
+        "verbal cue",
+        "independent"
+      ],
+      "mastery_criteria": "Child uses one object to represent another in play (block as phone, stick as spoon), 6 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child uses a block as a phone, a stick as a spoon. Using one object to stand for another is symbolic thinking — the same kind of thinking that makes language possible (a word stands for a thing).",
+        "hindi": "आपका बच्चा फ़ोन के रूप में ब्लॉक का उपयोग करता है। एक वस्तु को दूसरी के लिए उपयोग करना प्रतीकात्मक सोच है — वही सोच जो भाषा को संभव बनाती है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0062",
+      "name": "Parallel Play with Peer",
+      "framework_source": "NDBI",
+      "framework_citation": "Schreibman et al. (2015). Naturalistic Developmental Behavioral Interventions: Empirically Validated Treatments for Autism Spectrum Disorder. Journal of Autism and Developmental Disorders, 45(8).",
+      "developmental_domain": "play_skills",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 24,
+        "max": 42
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "duplicate toy sets for two children"
+      ],
+      "prompting_hierarchy": [
+        "proximity prompts",
+        "narrate peer's play",
+        "independent"
+      ],
+      "mastery_criteria": "Child plays beside another child with similar materials, occasionally looking at peer, for 5+ minutes across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child plays beside another child — not yet together, but aware of the other child and sometimes watching them. This is parallel play, the natural first stage before children learn to play together.",
+        "hindi": "आपका बच्चा दूसरे बच्चे के बगल में खेलता है — अभी एक साथ नहीं, लेकिन दूसरे बच्चे के बारे में जागरूक।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0063",
+      "name": "Sharing Materials During Play",
+      "framework_source": "NDBI",
+      "framework_citation": "Schreibman et al. (2015). Naturalistic Developmental Behavioral Interventions: Empirically Validated Treatments for Autism Spectrum Disorder. Journal of Autism and Developmental Disorders, 45(8).",
+      "developmental_domain": "play_skills",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 30,
+        "max": 48
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "limited play materials that must be shared (one container of blocks)"
+      ],
+      "prompting_hierarchy": [
+        "model sharing",
+        "verbal cue 'your turn'",
+        "physical guidance to give",
+        "independent"
+      ],
+      "mastery_criteria": "Child shares materials with peer or therapist without protest, 6 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child shares toys with others without becoming upset. Sharing requires understanding that they can give something up and get it back, plus understanding that others want a turn too. This is foundational for friendship.",
+        "hindi": "आपका बच्चा परेशान हुए बिना दूसरों के साथ खिलौने साझा करता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0064",
+      "name": "Cooperative Play with Defined Roles",
+      "framework_source": "DIR",
+      "framework_citation": "Greenspan & Wieder (2006). Engaging Autism: Using the Floortime Approach to Help Children Relate, Communicate, and Think. Da Capo Press.",
+      "developmental_domain": "play_skills",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 42,
+        "max": 72
+      },
+      "duration_minutes": 15,
+      "materials_required": [
+        "doctor kit, kitchen set, or other role-play materials"
+      ],
+      "prompting_hierarchy": [
+        "scaffold role assignment",
+        "model role behavior",
+        "independent"
+      ],
+      "mastery_criteria": "Child engages in pretend play with defined roles ('you are the doctor, I am the patient') with peer or therapist, sustained for 10+ minutes, in 3 of 4 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child takes on a role in pretend play — being the doctor while the other person is the patient. Role play requires understanding two perspectives at once and is a major social and language milestone.",
+        "hindi": "आपका बच्चा नाटक खेल में एक भूमिका निभाता है — डॉक्टर बनना जबकि दूसरा व्यक्ति मरीज़ है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0065",
+      "name": "Building/Constructing Play",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "play_skills",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay",
+        "adhd"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 24,
+        "max": 48
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "blocks, mega-blocks, simple construction toys"
+      ],
+      "prompting_hierarchy": [
+        "model first piece",
+        "physical guidance",
+        "independent"
+      ],
+      "mastery_criteria": "Child builds a simple structure (tower of 4+ blocks, simple bridge), 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child stacks blocks into a tower or builds a simple structure. Constructive play develops spatial reasoning, fine motor control, and planning — and it usually becomes a favorite activity at this age.",
+        "hindi": "आपका बच्चा ब्लॉकों को टॉवर में स्टैक करता है या एक सरल संरचना बनाता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0066",
+      "name": "Puzzles - Simple Inset",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "play_skills",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay",
+        "adhd"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 36
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "3-5 piece inset puzzle"
+      ],
+      "prompting_hierarchy": [
+        "physical guidance",
+        "point to correct slot",
+        "independent"
+      ],
+      "mastery_criteria": "Child completes a 5-piece inset puzzle independently, in 3 of 4 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child fits puzzle pieces into the right shapes. Puzzles teach visual matching, shape recognition, and persistence — the skill of trying multiple options until one works.",
+        "hindi": "आपका बच्चा पहेली के टुकड़ों को सही आकार में फिट करता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0067",
+      "name": "Imaginative Story Creation in Play",
+      "framework_source": "DIR",
+      "framework_citation": "Greenspan & Wieder (2006). Engaging Autism: Using the Floortime Approach to Help Children Relate, Communicate, and Think. Da Capo Press.",
+      "developmental_domain": "play_skills",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 48,
+        "max": 72
+      },
+      "duration_minutes": 15,
+      "materials_required": [
+        "assorted toys (animals, vehicles, dolls)"
+      ],
+      "prompting_hierarchy": [
+        "scaffold with leading questions",
+        "model a story element",
+        "independent"
+      ],
+      "mastery_criteria": "Child creates an original pretend story with 3+ events using toys, sustained for 10+ minutes, in 3 of 4 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child makes up a pretend story — 'the dog goes to the park, then it rains, then mommy comes.' Original story-making in play is one of the most advanced symbolic skills and predicts strong language and literacy.",
+        "hindi": "आपका बच्चा एक नाटक कहानी बनाता है। मूल कहानी-निर्माण भाषा और साक्षरता की भविष्यवाणी करता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0068",
+      "name": "Back-and-Forth Object Exchange",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "social_reciprocity",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 36
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "ball, beanbag, or other passable object"
+      ],
+      "prompting_hierarchy": [
+        "physical guidance to receive and return",
+        "open hand cue",
+        "independent"
+      ],
+      "mastery_criteria": "Child receives object and returns it to therapist, sustained for 5+ exchanges, 6 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "We roll a ball back and forth. Your child learns that interaction has a back-and-forth pattern — I do, then you do, then I do. This is the foundation of conversation and of all social relationships.",
+        "hindi": "हम गेंद को आगे-पीछे लुढ़काते हैं। आपका बच्चा सीखता है कि बातचीत में आगे-पीछे का पैटर्न होता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0069",
+      "name": "Turn-Taking with Cause-Effect Toy",
+      "framework_source": "NDBI",
+      "framework_citation": "Schreibman et al. (2015). Naturalistic Developmental Behavioral Interventions: Empirically Validated Treatments for Autism Spectrum Disorder. Journal of Autism and Developmental Disorders, 45(8).",
+      "developmental_domain": "social_reciprocity",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 36
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "one cause-effect toy"
+      ],
+      "prompting_hierarchy": [
+        "physical guidance to wait",
+        "verbal cue 'my turn' / 'your turn'",
+        "independent"
+      ],
+      "mastery_criteria": "Child waits for therapist's turn and takes own turn appropriately, 5+ exchanges sustained, 6 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "We use one favorite toy and take turns — 'my turn,' 'your turn.' Taking turns is hard for young children. It requires waiting, plus the trust that the toy will come back to them. This is a key social skill.",
+        "hindi": "हम एक पसंदीदा खिलौने का उपयोग करते हैं और बारी-बारी से लेते हैं।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0070",
+      "name": "Greeting Routines",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "social_reciprocity",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 42
+      },
+      "duration_minutes": 3,
+      "materials_required": [
+        "none, may use puppet for variety"
+      ],
+      "prompting_hierarchy": [
+        "model wave",
+        "physical guidance",
+        "verbal cue",
+        "independent"
+      ],
+      "mastery_criteria": "Child responds to 'hi' with wave or vocal greeting, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child learns to say or wave 'hello' and 'goodbye.' Greetings are the simplest form of social acknowledgment and are a daily building block of all social relationships.",
+        "hindi": "आपका बच्चा 'नमस्ते' और 'अलविदा' कहना या लहराना सीखता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0071",
+      "name": "Responding to Emotional Cues",
+      "framework_source": "DIR",
+      "framework_citation": "Greenspan & Wieder (2006). Engaging Autism: Using the Floortime Approach to Help Children Relate, Communicate, and Think. Da Capo Press.",
+      "developmental_domain": "social_reciprocity",
+      "diagnostic_profile_applicability": [
+        "autism"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 30,
+        "max": 48
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "picture cards of emotions, mirror"
+      ],
+      "prompting_hierarchy": [
+        "exaggerated facial expression",
+        "verbal label",
+        "independent"
+      ],
+      "mastery_criteria": "Child identifies basic emotions (happy, sad, angry) on face or in picture, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child learns to recognize basic emotions on faces — happy, sad, angry. Reading emotions is the foundation of empathy and is essential for navigating friendships and family relationships.",
+        "hindi": "आपका बच्चा चेहरों पर बुनियादी भावनाओं को पहचानना सीखता है — खुश, दुखी, गुस्सा।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0072",
+      "name": "Joint Activity with Sustained Engagement",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "social_reciprocity",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 30,
+        "max": 48
+      },
+      "duration_minutes": 15,
+      "materials_required": [
+        "puzzle, art project, or building activity"
+      ],
+      "prompting_hierarchy": [
+        "redirect to activity",
+        "narrate",
+        "independent"
+      ],
+      "mastery_criteria": "Child engages in joint activity with therapist for 10+ minutes with sustained interaction, in 3 of 4 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child stays engaged in one activity with the therapist for 10+ minutes — not parallel, but actively sharing the experience. This sustained engagement is the level needed for classroom group work and for friendship play.",
+        "hindi": "आपका बच्चा 10+ मिनट तक थेरेपिस्ट के साथ एक गतिविधि में लगा रहता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0073",
+      "name": "Initiating Social Interaction",
+      "framework_source": "NDBI",
+      "framework_citation": "Schreibman et al. (2015). Naturalistic Developmental Behavioral Interventions: Empirically Validated Treatments for Autism Spectrum Disorder. Journal of Autism and Developmental Disorders, 45(8).",
+      "developmental_domain": "social_reciprocity",
+      "diagnostic_profile_applicability": [
+        "autism"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 60
+      },
+      "duration_minutes": 15,
+      "materials_required": [
+        "interesting toys placed near therapist"
+      ],
+      "prompting_hierarchy": [
+        "positioning therapist as gateway",
+        "expectant pause",
+        "independent"
+      ],
+      "mastery_criteria": "Child spontaneously initiates social interaction with therapist (approaches, gestures, vocalizes) 5+ times per session, in 3 of 4 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child comes to us on their own to start an interaction — tapping our shoulder, bringing us a toy, asking for help. Initiating social contact is one of the strongest indicators of social development.",
+        "hindi": "आपका बच्चा बातचीत शुरू करने के लिए अपने आप हमारे पास आता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0074",
+      "name": "Pretend Play with Peer (Cooperative)",
+      "framework_source": "NDBI",
+      "framework_citation": "Schreibman et al. (2015). Naturalistic Developmental Behavioral Interventions: Empirically Validated Treatments for Autism Spectrum Disorder. Journal of Autism and Developmental Disorders, 45(8).",
+      "developmental_domain": "social_reciprocity",
+      "diagnostic_profile_applicability": [
+        "autism"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 42,
+        "max": 72
+      },
+      "duration_minutes": 15,
+      "materials_required": [
+        "play set requiring cooperation (kitchen, train track)"
+      ],
+      "prompting_hierarchy": [
+        "scaffold roles",
+        "model peer interaction",
+        "independent"
+      ],
+      "mastery_criteria": "Child engages in cooperative pretend play with a peer for 10+ minutes with mutual response, in 3 of 4 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child plays pretend together with another child — not just beside them, but together, taking each other's ideas. Cooperative pretend play is one of the most advanced social play skills.",
+        "hindi": "आपका बच्चा दूसरे बच्चे के साथ नाटक खेलता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0075",
+      "name": "Conversation Turn-Taking",
+      "framework_source": "HANEN",
+      "framework_citation": "Pepper & Weitzman (2004). It Takes Two to Talk: A Practical Guide for Parents. Hanen Centre Publication.",
+      "developmental_domain": "social_reciprocity",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 60
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "topic of mutual interest"
+      ],
+      "prompting_hierarchy": [
+        "pause expectantly",
+        "ask follow-up",
+        "model question to therapist",
+        "independent"
+      ],
+      "mastery_criteria": "Child sustains 3+ conversational turns on one topic, 6 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child has a real back-and-forth conversation — they say something, we respond, they respond back. Three or more turns on the same topic shows true conversation skills, not just question-and-answer.",
+        "hindi": "आपका बच्चा एक वास्तविक आगे-पीछे की बातचीत करता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0076",
+      "name": "Following Group Routines",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "social_reciprocity",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay",
+        "adhd"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 60
+      },
+      "duration_minutes": 15,
+      "materials_required": [
+        "circle time materials, group activity"
+      ],
+      "prompting_hierarchy": [
+        "physical guidance",
+        "verbal cue",
+        "peer model",
+        "independent"
+      ],
+      "mastery_criteria": "Child participates in small group routine (sitting, singing along, doing actions) for 10+ minutes, in 3 of 4 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child sits with a small group and participates in shared routines — singing the same song, doing the same actions. This is exactly the skill they will need for school assembly and group classroom activities.",
+        "hindi": "आपका बच्चा एक छोटे समूह के साथ बैठता है और साझा दिनचर्या में भाग लेता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0077",
+      "name": "Reading Social Context",
+      "framework_source": "DIR",
+      "framework_citation": "Greenspan & Wieder (2006). Engaging Autism: Using the Floortime Approach to Help Children Relate, Communicate, and Think. Da Capo Press.",
+      "developmental_domain": "social_reciprocity",
+      "diagnostic_profile_applicability": [
+        "autism"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 48,
+        "max": 72
+      },
+      "duration_minutes": 12,
+      "materials_required": [
+        "picture scenarios, video clips of social situations"
+      ],
+      "prompting_hierarchy": [
+        "scaffold with questions",
+        "highlight cues",
+        "independent"
+      ],
+      "mastery_criteria": "Child correctly identifies what is happening in a social scene and predicts what should happen next, 6 of 10 scenarios across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child looks at a picture or short video of a social situation and understands what is happening — and what might happen next. This shows they can read social context, which is essential for navigating the social world successfully.",
+        "hindi": "आपका बच्चा सामाजिक स्थिति की एक तस्वीर देखता है और समझता है कि क्या हो रहा है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0078",
+      "name": "Sympathy and Comfort Behaviors",
+      "framework_source": "DIR",
+      "framework_citation": "Greenspan & Wieder (2006). Engaging Autism: Using the Floortime Approach to Help Children Relate, Communicate, and Think. Da Capo Press.",
+      "developmental_domain": "social_reciprocity",
+      "diagnostic_profile_applicability": [
+        "autism"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 60
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "doll, opportunity for therapist to express mild distress"
+      ],
+      "prompting_hierarchy": [
+        "narrate the emotion",
+        "model comfort behavior",
+        "independent"
+      ],
+      "mastery_criteria": "Child shows comforting behavior (pat, hug, gives toy) when someone expresses distress, 4 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "When someone is sad or hurt, your child responds with comfort — a pat, a hug, bringing a toy. This is empathy in action and is one of the most beautiful social milestones to witness.",
+        "hindi": "जब कोई दुखी या आहत होता है, आपका बच्चा सांत्वना के साथ प्रतिक्रिया करता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0079",
+      "name": "Following Adult's Lead in Play",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "social_reciprocity",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 36
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "preferred play materials"
+      ],
+      "prompting_hierarchy": [
+        "join child's play first",
+        "introduce variation",
+        "physical guidance",
+        "independent"
+      ],
+      "mastery_criteria": "Child accepts adult's variation to their play activity without protest, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child accepts when we add something to their play — like rolling the ball a different way or adding a new toy to the scene. Accepting variation is the beginning of flexible play and shared activity.",
+        "hindi": "आपका बच्चा स्वीकार करता है जब हम उनके खेल में कुछ जोड़ते हैं।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0080",
+      "name": "Co-Regulation with Calming Routine",
+      "framework_source": "DIR",
+      "framework_citation": "Greenspan & Wieder (2006). Engaging Autism: Using the Floortime Approach to Help Children Relate, Communicate, and Think. Da Capo Press.",
+      "developmental_domain": "self_regulation",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "adhd"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 24,
+        "max": 48
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "weighted blanket, deep pressure, slow music"
+      ],
+      "prompting_hierarchy": [
+        "physical co-regulation",
+        "verbal soothing",
+        "model breathing",
+        "independent"
+      ],
+      "mastery_criteria": "Child uses or accepts calming strategy when offered during mild dysregulation, 6 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "When your child gets upset or overstimulated, we use calming tools — deep pressure, quiet music, slow breathing — together. Co-regulation is when an adult's calm helps the child's nervous system calm down. Over time, this becomes self-regulation.",
+        "hindi": "जब आपका बच्चा परेशान हो जाता है, तो हम शांत करने वाले उपकरणों का उपयोग करते हैं। सह-नियमन तब होता है जब एक वयस्क की शांति बच्चे के तंत्रिका तंत्र को शांत करने में मदद करती है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0081",
+      "name": "Identifying Emotions in Self",
+      "framework_source": "DIR",
+      "framework_citation": "Greenspan & Wieder (2006). Engaging Autism: Using the Floortime Approach to Help Children Relate, Communicate, and Think. Da Capo Press.",
+      "developmental_domain": "self_regulation",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "adhd"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 60
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "emotion chart with simple faces"
+      ],
+      "prompting_hierarchy": [
+        "point to emotion",
+        "label aloud",
+        "independent"
+      ],
+      "mastery_criteria": "Child identifies own emotion (happy, sad, angry, calm) using chart or words, 6 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child learns to name what they're feeling — 'I'm angry' or 'I'm sad.' Once children can name an emotion, they can begin to manage it. Naming feelings is the first step in emotional regulation.",
+        "hindi": "आपका बच्चा यह नाम बताना सीखता है कि वे क्या महसूस कर रहे हैं।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0082",
+      "name": "Deep Breathing for Calming",
+      "framework_source": "DIR",
+      "framework_citation": "Greenspan & Wieder (2006). Engaging Autism: Using the Floortime Approach to Help Children Relate, Communicate, and Think. Da Capo Press.",
+      "developmental_domain": "self_regulation",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "adhd"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 72
+      },
+      "duration_minutes": 5,
+      "materials_required": [
+        "pinwheel, bubbles, or visual breathing aid"
+      ],
+      "prompting_hierarchy": [
+        "model breathing",
+        "use visual aid",
+        "independent"
+      ],
+      "mastery_criteria": "Child performs 3+ deep breaths on request when calm, generalizes to use during mild upset, 6 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "We practice slow, deep breaths using a pinwheel or bubbles — make it spin or make bubbles. We practice when calm, so the skill is ready to use when feelings get big. Deep breathing is the most universally taught self-calming tool because it works.",
+        "hindi": "हम पवनचक्की या बुलबुलों का उपयोग करके धीमी, गहरी सांसें लेने का अभ्यास करते हैं।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0083",
+      "name": "Using a Visual Schedule for Transitions",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "self_regulation",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "adhd"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 30,
+        "max": 60
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "picture schedule cards"
+      ],
+      "prompting_hierarchy": [
+        "point to next item",
+        "physical guidance",
+        "independent"
+      ],
+      "mastery_criteria": "Child uses visual schedule to transition between activities without distress, 8 of 10 transitions across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child looks at a picture schedule to know what's coming next. Knowing what's coming reduces anxiety and makes transitions much easier. Many children with autism and ADHD do dramatically better when they have a visual schedule.",
+        "hindi": "आपका बच्चा अगला क्या आ रहा है यह जानने के लिए चित्र अनुसूची को देखता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0084",
+      "name": "Tolerating Wait Times",
+      "framework_source": "BARKLEY_ADHD",
+      "framework_citation": "Barkley (2013). Defiant Children: A Clinician's Manual for Assessment and Parent Training (3rd ed.). Guilford Press.",
+      "developmental_domain": "self_regulation",
+      "diagnostic_profile_applicability": [
+        "adhd",
+        "autism"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 72
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "visual timer (sand timer or visual app)"
+      ],
+      "prompting_hierarchy": [
+        "physical hold",
+        "verbal cue 'wait'",
+        "show timer",
+        "independent"
+      ],
+      "mastery_criteria": "Child waits 30+ seconds for a desired item with visual timer, without protest, 8 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child learns to wait when something they want isn't available right now. We use a sand timer or visual timer so they can see the wait shrinking. Waiting is one of the hardest skills for children with ADHD and a major leap when achieved.",
+        "hindi": "आपका बच्चा प्रतीक्षा करना सीखता है जब उन्हें कुछ चाहिए तो वह अभी उपलब्ध नहीं है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0085",
+      "name": "Choice-Making for Autonomy",
+      "framework_source": "DIR",
+      "framework_citation": "Greenspan & Wieder (2006). Engaging Autism: Using the Floortime Approach to Help Children Relate, Communicate, and Think. Da Capo Press.",
+      "developmental_domain": "self_regulation",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "speech_delay",
+        "adhd"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 24,
+        "max": 48
+      },
+      "duration_minutes": 5,
+      "materials_required": [
+        "pairs of options (toys, snacks, activities)"
+      ],
+      "prompting_hierarchy": [
+        "physical guidance to point",
+        "verbal cue",
+        "independent"
+      ],
+      "mastery_criteria": "Child makes a clear choice between 2 options, 8 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "We offer two options and your child chooses one — 'do you want apple or banana?' Choice-making gives your child a sense of control over their world, which actually reduces difficult behaviors because they feel heard.",
+        "hindi": "हम दो विकल्प प्रदान करते हैं और आपका बच्चा एक चुनता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0086",
+      "name": "Asking for a Break",
+      "framework_source": "BARKLEY_ADHD",
+      "framework_citation": "Barkley (2013). Defiant Children: A Clinician's Manual for Assessment and Parent Training (3rd ed.). Guilford Press.",
+      "developmental_domain": "self_regulation",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "adhd"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 72
+      },
+      "duration_minutes": 5,
+      "materials_required": [
+        "'break' picture card or sign"
+      ],
+      "prompting_hierarchy": [
+        "model the request",
+        "physical guidance to use card/sign",
+        "independent"
+      ],
+      "mastery_criteria": "Child requests a break appropriately when feeling overwhelmed, 4 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "When your child feels overwhelmed, they ask for a break — using a picture card, a sign, or words. This is the highest level of self-regulation: noticing their own state and asking for what they need. This skill prevents meltdowns and is highly valued in schools.",
+        "hindi": "जब आपका बच्चा अभिभूत महसूस करता है, तो वे ब्रेक माँगते हैं।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0087",
+      "name": "Sensory Diet Activities",
+      "framework_source": "DIR",
+      "framework_citation": "Greenspan & Wieder (2006). Engaging Autism: Using the Floortime Approach to Help Children Relate, Communicate, and Think. Da Capo Press.",
+      "developmental_domain": "self_regulation",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "adhd"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 24,
+        "max": 72
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "proprioceptive and vestibular tools (swing, ball pit, weighted vest, brushes)"
+      ],
+      "prompting_hierarchy": [
+        "facilitate activity",
+        "verbal cue",
+        "independent"
+      ],
+      "mastery_criteria": "Child engages in 5+ minutes of regulating sensory activity when offered, in 3 of 4 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Sensory activities — swinging, jumping, deep pressure — help regulate your child's nervous system. We learn which sensory inputs help your child stay calm and focused. Different children need different inputs; we identify yours through trial and observation.",
+        "hindi": "संवेदी गतिविधियाँ — झूलना, कूदना — आपके बच्चे के तंत्रिका तंत्र को नियंत्रित करने में मदद करती हैं।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0088",
+      "name": "First-Then Sequencing",
+      "framework_source": "ESDM",
+      "framework_citation": "Rogers & Dawson (2010). Early Start Denver Model for Young Children with Autism. Guilford Press.",
+      "developmental_domain": "self_regulation",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "adhd"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 24,
+        "max": 48
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "first/then visual board"
+      ],
+      "prompting_hierarchy": [
+        "point to first item",
+        "verbal cue 'first... then...'",
+        "independent"
+      ],
+      "mastery_criteria": "Child completes a non-preferred task (first) to access preferred activity (then), 8 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "We use a 'first... then...' board: 'first puzzle, then snack.' Your child learns that doing something they don't love unlocks something they want. This is the basis of motivation and is used in classrooms and home routines.",
+        "hindi": "हम 'पहले... फिर...' बोर्ड का उपयोग करते हैं: 'पहले पहेली, फिर नाश्ता'।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0089",
+      "name": "Self-Soothing with Comfort Object",
+      "framework_source": "DIR",
+      "framework_citation": "Greenspan & Wieder (2006). Engaging Autism: Using the Floortime Approach to Help Children Relate, Communicate, and Think. Da Capo Press.",
+      "developmental_domain": "self_regulation",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "adhd"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 18,
+        "max": 48
+      },
+      "duration_minutes": 5,
+      "materials_required": [
+        "child's preferred comfort object (blanket, stuffed toy)"
+      ],
+      "prompting_hierarchy": [
+        "offer object",
+        "model self-soothing use",
+        "independent"
+      ],
+      "mastery_criteria": "Child uses comfort object to self-soothe during mild dysregulation, 6 of 10 opportunities across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child learns to reach for or use their comfort object — a blanket or stuffed toy — when they feel overwhelmed. Having a self-soothing tool builds independence in emotional regulation.",
+        "hindi": "आपका बच्चा अभिभूत महसूस करने पर अपने आराम वस्तु तक पहुँचना सीखता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0090",
+      "name": "Sustained Attention to Tabletop Task",
+      "framework_source": "BARKLEY_ADHD",
+      "framework_citation": "Barkley (2013). Defiant Children: A Clinician's Manual for Assessment and Parent Training (3rd ed.). Guilford Press.",
+      "developmental_domain": "attention_executive",
+      "diagnostic_profile_applicability": [
+        "adhd",
+        "autism"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 30,
+        "max": 60
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "age-appropriate tabletop task (puzzle, sorting, coloring)"
+      ],
+      "prompting_hierarchy": [
+        "physical redirect",
+        "verbal cue 'finish this'",
+        "independent"
+      ],
+      "mastery_criteria": "Child sustains attention to single task for 5+ minutes, 6 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child sits and works on one activity for 5 full minutes without getting up or being redirected. Sustained attention to a task is essential for school and is often the hardest skill for children with ADHD.",
+        "hindi": "आपका बच्चा बिना उठे या पुनर्निर्देशित किए बिना 5 पूरे मिनट तक एक गतिविधि पर बैठता है और काम करता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0091",
+      "name": "Selective Attention Game",
+      "framework_source": "BARKLEY_ADHD",
+      "framework_citation": "Barkley (2013). Defiant Children: A Clinician's Manual for Assessment and Parent Training (3rd ed.). Guilford Press.",
+      "developmental_domain": "attention_executive",
+      "diagnostic_profile_applicability": [
+        "adhd",
+        "autism"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 42,
+        "max": 72
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "sorting game with distractors, find-the-target activity"
+      ],
+      "prompting_hierarchy": [
+        "verbal cue to focus",
+        "highlight target",
+        "independent"
+      ],
+      "mastery_criteria": "Child correctly identifies target items while ignoring distractors, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child finds specific items (red blocks) while ignoring distractors (other colored blocks). Selective attention — filtering out what doesn't matter — is the foundation of all classroom learning.",
+        "hindi": "आपका बच्चा विशिष्ट वस्तुएँ (लाल ब्लॉक) ढूँढता है जबकि विकर्षणों (अन्य रंगीन ब्लॉक) को अनदेखा करता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0092",
+      "name": "Stop-Go Game (Inhibitory Control)",
+      "framework_source": "BARKLEY_ADHD",
+      "framework_citation": "Barkley (2013). Defiant Children: A Clinician's Manual for Assessment and Parent Training (3rd ed.). Guilford Press.",
+      "developmental_domain": "attention_executive",
+      "diagnostic_profile_applicability": [
+        "adhd",
+        "autism"
+      ],
+      "skill_level": "emerging",
+      "target_age_range_months": {
+        "min": 30,
+        "max": 60
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "red and green stop/go cards, or use 'freeze!' game"
+      ],
+      "prompting_hierarchy": [
+        "physical assist to stop",
+        "exaggerated visual cue",
+        "independent"
+      ],
+      "mastery_criteria": "Child stops action immediately on 'stop' signal, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child learns to stop immediately when we say 'stop' or show a red signal. Inhibitory control — being able to stop yourself — is the foundation of all self-control and is especially important for children with ADHD.",
+        "hindi": "आपका बच्चा सीखता है कि जब हम 'रुको' कहते हैं तो तुरंत रुक जाए।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0093",
+      "name": "Simon Says (Inhibition + Listening)",
+      "framework_source": "BARKLEY_ADHD",
+      "framework_citation": "Barkley (2013). Defiant Children: A Clinician's Manual for Assessment and Parent Training (3rd ed.). Guilford Press.",
+      "developmental_domain": "attention_executive",
+      "diagnostic_profile_applicability": [
+        "adhd",
+        "autism"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 42,
+        "max": 72
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "none"
+      ],
+      "prompting_hierarchy": [
+        "model the rule",
+        "verbal cue",
+        "independent"
+      ],
+      "mastery_criteria": "Child performs action only when 'Simon Says' is given, withholds otherwise, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Simon Says combines listening, inhibition, and following directions all at once. It is a powerful game for children with ADHD because it makes self-control fun and gives them practice stopping themselves before acting.",
+        "hindi": "साइमन सेज़ सुनना, निषेध, और निर्देशों का पालन एक साथ करता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0094",
+      "name": "Working Memory - Hidden Object Game",
+      "framework_source": "VBMAPP",
+      "framework_citation": "Sundberg (2008). Verbal Behavior Milestones Assessment and Placement Program. AVB Press.",
+      "developmental_domain": "attention_executive",
+      "diagnostic_profile_applicability": [
+        "adhd",
+        "autism"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 30,
+        "max": 60
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "3 cups, small object"
+      ],
+      "prompting_hierarchy": [
+        "slow demonstration",
+        "verbal reminder",
+        "independent"
+      ],
+      "mastery_criteria": "Child remembers which cup hides an object after 10-second delay, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "We hide a toy under one of three cups and shuffle them. Your child remembers which cup. This builds working memory — holding information in mind for a short time — which is essential for following multi-step directions.",
+        "hindi": "हम तीन में से एक कप के नीचे एक खिलौना छुपाते हैं। आपका बच्चा याद रखता है कि कौन सा कप।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0095",
+      "name": "Sequencing Daily Routine Cards",
+      "framework_source": "BARKLEY_ADHD",
+      "framework_citation": "Barkley (2013). Defiant Children: A Clinician's Manual for Assessment and Parent Training (3rd ed.). Guilford Press.",
+      "developmental_domain": "attention_executive",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "adhd",
+        "speech_delay"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 60
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "picture cards of routine steps (brush teeth, get dressed, eat breakfast)"
+      ],
+      "prompting_hierarchy": [
+        "physical assist",
+        "model first card",
+        "independent"
+      ],
+      "mastery_criteria": "Child places 4+ routine cards in correct order, 6 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child puts pictures of a routine in the right order — wake up, brush teeth, get dressed, eat. Understanding sequences builds executive function and helps your child follow daily routines independently.",
+        "hindi": "आपका बच्चा एक दिनचर्या की तस्वीरें सही क्रम में रखता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0096",
+      "name": "Pattern Completion",
+      "framework_source": "VBMAPP",
+      "framework_citation": "Sundberg (2008). Verbal Behavior Milestones Assessment and Placement Program. AVB Press.",
+      "developmental_domain": "attention_executive",
+      "diagnostic_profile_applicability": [
+        "autism",
+        "adhd"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 60
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "colored blocks, beads, or pattern cards"
+      ],
+      "prompting_hierarchy": [
+        "model first pattern",
+        "point to next position",
+        "independent"
+      ],
+      "mastery_criteria": "Child completes a simple pattern (red, blue, red, blue, ___?), 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child looks at a pattern and figures out what comes next. Pattern recognition builds the thinking skills needed for math and reading. It also strengthens attention to detail.",
+        "hindi": "आपका बच्चा एक पैटर्न देखता है और पता लगाता है कि अगला क्या आता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0097",
+      "name": "Task Initiation",
+      "framework_source": "BARKLEY_ADHD",
+      "framework_citation": "Barkley (2013). Defiant Children: A Clinician's Manual for Assessment and Parent Training (3rd ed.). Guilford Press.",
+      "developmental_domain": "attention_executive",
+      "diagnostic_profile_applicability": [
+        "adhd",
+        "autism"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 42,
+        "max": 72
+      },
+      "duration_minutes": 5,
+      "materials_required": [
+        "task with clear start"
+      ],
+      "prompting_hierarchy": [
+        "verbal cue 'start now'",
+        "visual timer",
+        "model first action",
+        "independent"
+      ],
+      "mastery_criteria": "Child starts a task within 30 seconds of instruction, 8 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child starts a task within 30 seconds when asked. Task initiation — actually starting — is often harder for children with ADHD than the task itself. This skill is crucial for school and for daily self-care routines.",
+        "hindi": "आपका बच्चा निर्देश के 30 सेकंड के भीतर एक कार्य शुरू करता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0098",
+      "name": "Working with a Visual Timer",
+      "framework_source": "BARKLEY_ADHD",
+      "framework_citation": "Barkley (2013). Defiant Children: A Clinician's Manual for Assessment and Parent Training (3rd ed.). Guilford Press.",
+      "developmental_domain": "attention_executive",
+      "diagnostic_profile_applicability": [
+        "adhd",
+        "autism"
+      ],
+      "skill_level": "established",
+      "target_age_range_months": {
+        "min": 36,
+        "max": 72
+      },
+      "duration_minutes": 8,
+      "materials_required": [
+        "visual countdown timer"
+      ],
+      "prompting_hierarchy": [
+        "point to timer",
+        "verbal countdown",
+        "independent"
+      ],
+      "mastery_criteria": "Child completes task within set time limit using timer, 6 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child works with a visible timer that shrinks as time passes. Seeing time pass helps children understand and pace themselves — a skill many children with ADHD genuinely lack until taught with visual tools.",
+        "hindi": "आपका बच्चा एक दृश्यमान टाइमर के साथ काम करता है जो समय बीतने के साथ सिकुड़ता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0099",
+      "name": "Flexible Thinking - Switching Rules",
+      "framework_source": "BARKLEY_ADHD",
+      "framework_citation": "Barkley (2013). Defiant Children: A Clinician's Manual for Assessment and Parent Training (3rd ed.). Guilford Press.",
+      "developmental_domain": "attention_executive",
+      "diagnostic_profile_applicability": [
+        "adhd",
+        "autism"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 48,
+        "max": 72
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "sorting cards by color, then by shape (same cards)"
+      ],
+      "prompting_hierarchy": [
+        "verbal cue for rule change",
+        "demonstrate switch",
+        "independent"
+      ],
+      "mastery_criteria": "Child switches sorting rule (color → shape) on cue, 6 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child sorts cards by color, then we say 'now by shape' and they switch. This is cognitive flexibility — being able to change how you're thinking when the rules change. This is critical for school and for navigating life.",
+        "hindi": "आपका बच्चा रंग के अनुसार कार्ड क्रमबद्ध करता है, फिर हम कहते हैं 'अब आकार के अनुसार' और वे बदल जाते हैं।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    },
+    {
+      "id": "ACT-0100",
+      "name": "Following Multi-Step Instructions in Sequence",
+      "framework_source": "BARKLEY_ADHD",
+      "framework_citation": "Barkley (2013). Defiant Children: A Clinician's Manual for Assessment and Parent Training (3rd ed.). Guilford Press.",
+      "developmental_domain": "attention_executive",
+      "diagnostic_profile_applicability": [
+        "adhd",
+        "autism",
+        "speech_delay"
+      ],
+      "skill_level": "mastery",
+      "target_age_range_months": {
+        "min": 48,
+        "max": 72
+      },
+      "duration_minutes": 10,
+      "materials_required": [
+        "materials for 3-4 step task"
+      ],
+      "prompting_hierarchy": [
+        "repeat instruction",
+        "visual sequence aid",
+        "independent"
+      ],
+      "mastery_criteria": "Child completes 4-step instruction sequence (get crayon, draw circle, put crayon away, raise hand), 6 of 10 trials across 3 sessions",
+      "therapist_steps": [],
+      "parent_explanation": {
+        "english": "Your child holds 4 separate instructions in mind and does them in order. This is the executive function level needed for classroom work, homework, and self-care routines. Many children with ADHD need this practiced repeatedly to build the habit.",
+        "hindi": "आपका बच्चा 4 अलग-अलग निर्देशों को ध्यान में रखता है और उन्हें क्रम में करता है।"
+      },
+      "validation_status": "draft_pending_clinical_validation"
+    }
+  ]
+}
