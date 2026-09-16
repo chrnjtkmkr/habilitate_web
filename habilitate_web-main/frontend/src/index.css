@@ -1,0 +1,25 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    font-family: theme('fontFamily.sans');
+    font-size: 16px;
+    line-height: 1.5;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+    background: theme('colors.background');
+    color: theme('colors.ink.primary');
+  }
+
+  body {
+    margin: 0;
+  }
+}
+
+/* Subtle pulse for spontaneous moment suggestion — gentler than Tailwind animate-pulse */
+@keyframes spontPulse {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.04); }
+}

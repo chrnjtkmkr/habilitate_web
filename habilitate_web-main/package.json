@@ -1,0 +1,25 @@
+{
+  "name": "habilitate",
+  "version": "1.0.0",
+  "description": "Habilitate is a web platform for pediatric developmental therapy centers in India. Therapists run structured sessions on a tablet in the browser, with MediaPipe providing real-time engagement signals. Supervising therapists review weekly progress reports before they are delivered to parents via WhatsApp.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/sushithejamesbond/habilitate.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/sushithejamesbond/habilitate/issues"
+  },
+  "homepage": "https://github.com/sushithejamesbond/habilitate#readme",
+  "devDependencies": {
+    "pg": "^8.21.0",
+    "supabase": "^2.101.0"
+  }
+}

@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <link rel="icon" href="/favicon-32.png" type="image/png" sizes="32x32">
+    <link rel="icon" href="/favicon-16.png" type="image/png" sizes="16x16">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,600;9..144,700;9..144,800&display=swap" rel="stylesheet" />
+    <title>Habilitate — pediatric developmental therapy platform</title>
+    <meta name="description" content="AI-guided developmental therapy for tier-2 Indian centres. Real-time engagement measurement, session structure, parent reports." />
+    <meta property="og:title" content="Habilitate" />
+    <meta property="og:description" content="AI-guided developmental therapy for tier-2 Indian centres." />
+    <meta property="og:type" content="website" />
+    <meta property="og:url" content="https://app.habilitatelabs.com" />
+    <meta name="twitter:card" content="summary" />
+  </head>
+  <body>
+    <div id="root"></div>
+    <!-- Preload MediaPipe vision from CDN before React mounts.
+         npm package has broken exports with Vite 8; CDN via script tag works. -->
+    <script type="module">
+      import { FaceLandmarker, HandLandmarker, FilesetResolver } from 'https://cdn.jsdelivr.net/npm/@mediapipe/tasks-vision@0.10.14/vision_bundle.mjs';
+      window.FaceLandmarker = FaceLandmarker;
+      window.HandLandmarker = HandLandmarker;
+      window.FilesetResolver = FilesetResolver;
+    </script>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>
