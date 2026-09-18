@@ -22,6 +22,9 @@ const {
   error,
   isConnected,
 
+  bandIsOnlineElsewhere,
+  bandOnlineSince,
+
   wifiStatus,
   wifiReady,
   wifiError,
@@ -214,6 +217,29 @@ const {
               </div>
             </div>
           )}
+
+        {/* ===================================================
+            ISSUE 1: BAND IN USE ELSEWHERE
+            =================================================== */}
+
+        {bandIsOnlineElsewhere && (
+          <div className="mt-3 rounded-xl border border-warning/30 bg-warning/5 p-3">
+            <p className="text-sm font-medium text-ink-primary">
+              Band already in use
+            </p>
+
+            <p className="mt-1 text-xs leading-5 text-ink-secondary">
+              Band {bandId ?? 'this device'} is currently
+              streaming data from another session
+              {bandOnlineSince
+                ? ` (since ${new Date(bandOnlineSince).toLocaleTimeString()})`
+                : ''}.
+              You can still connect via Bluetooth to configure
+              it, but data transmission will remain active on
+              the other device until that session ends.
+            </p>
+          </div>
+        )}
 
         {/* ===================================================
             READY MESSAGE
@@ -420,6 +446,37 @@ const {
                 </p>
               </div>
             )}
+
+          {/* =================================================
+              ISSUE 1: BAND IN USE ELSEWHERE (modal)
+              ================================================= */}
+
+          {bandIsOnlineElsewhere && (
+            <div className="rounded-xl border border-warning/30 bg-warning/5 p-4">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-warning/10 text-warning">
+                  ⚠
+                </div>
+
+                <div>
+                  <h4 className="font-medium text-ink-primary">
+                    Band already in use
+                  </h4>
+
+                  <p className="mt-1 text-sm leading-5 text-ink-secondary">
+                    This band is currently streaming data from
+                    another device or browser session
+                    {bandOnlineSince
+                      ? ` (online since ${new Date(bandOnlineSince).toLocaleTimeString()})`
+                      : ''}.
+                    You can still view and configure it here,
+                    but sensor data will only transmit to one
+                    session at a time.
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
 
           {/* =================================================
               WIFI STATUS
