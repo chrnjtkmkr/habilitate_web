@@ -11,7 +11,6 @@ create table public.device_telemetry (
   gz         double precision not null,
   temp       double precision not null,
   hr         double precision not null,
-  hrv        double precision,           -- HRV (ms) — nullable; populated by firmware when available
   spo2       double precision not null,
   gsr        double precision not null,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null

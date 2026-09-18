@@ -1,20 +1,24 @@
 import WebSocket from "ws";
 
-const DEVICE_SECRET = "kUemhvTeS6+g4yDvgakO1wX6PjFOSA00PdOg7KlLvfM=";
+const DEVICE_TOKEN = process.env.DEVICE_TOKEN;
+if (!DEVICE_TOKEN) {
+  console.error("ERROR: DEVICE_TOKEN environment variable is required");
+  process.exit(1);
+}
 
 const url = new URL(
   "wss://sqjuracvmmuyrdcapehk.supabase.co/functions/v1/wearable-ws"
 );
 
 url.searchParams.set("band_id", "HAB-001");
-url.searchParams.set("token", DEVICE_SECRET);
+url.searchParams.set("token", DEVICE_TOKEN);
 
 console.log("Connecting to Supabase WSS...");
 
 const ws = new WebSocket(url.toString());
 
 ws.on("open", () => {
-  console.log("✅ WSS CONNECTED");
+  console.log("WSS CONNECTED");
 
   ws.send(
     JSON.stringify({
@@ -59,7 +63,7 @@ ws.on("message", (message) => {
 
   if (data.type === "ack" && data.accepted === true) {
     console.log("");
-    console.log("🎉 SENSOR DATA ACCEPTED BY SUPABASE");
+    console.log("SENSOR DATA ACCEPTED BY SUPABASE");
 
     setTimeout(() => {
       ws.close();
@@ -68,7 +72,7 @@ ws.on("message", (message) => {
 });
 
 ws.on("error", (error) => {
-  console.error("❌ WSS ERROR:", error.message);
+  console.error("WSS ERROR:", error.message);
 });
 
 ws.on("close", (code, reason) => {

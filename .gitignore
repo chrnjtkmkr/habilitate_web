@@ -1,5 +1,8 @@
 # Node
 node_modules/
+
+# Firmware secrets
+firmware/**/secrets.h
 dist/
 build/
 .next/

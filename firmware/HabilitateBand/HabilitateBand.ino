@@ -55,12 +55,12 @@
 #define BAND_ID      "HAB-001"
 #define DEVICE_NAME  "Habilitate-HAB-001"
 
-// Device token — must match the SHA-256 hash stored in
-// device_credentials.token_hash for this band.
-// Use a build-time define to avoid committing the real value:
-//   -DDEVICE_TOKEN='"your-secret-here"'
-#ifndef DEVICE_TOKEN
-  #define DEVICE_TOKEN "CHANGE_ME_BEFORE_FLASHING"
+// Device token — loaded from secrets.h (gitignored).
+// Copy secrets.example.h → secrets.h and set the real value.
+#include "secrets.h"
+
+#ifdef DEVICE_TOKEN_IS_PLACEHOLDER
+  #error "Set a real DEVICE_TOKEN in secrets.h and delete DEVICE_TOKEN_IS_PLACEHOLDER"
 #endif
 
 // Supabase WebSocket endpoint
@@ -737,10 +737,12 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t /*length*/) {
     case WStype_DISCONNECTED:
       wsConnected     = false;
       wsAuthenticated = false;
+      Serial.printf("[WS] Disconnected\n");
       break;
 
     case WStype_CONNECTED:
       wsConnected = true;
+      Serial.printf("[WS] Connected\n");
       break;
 
     case WStype_TEXT: {
@@ -763,7 +765,7 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t /*length*/) {
       if (strcmp(msgType, "pong") == 0)  break; // heartbeat — no action
       if (strcmp(msgType, "ack")  == 0)  break; // data ack  — no action
       if (strcmp(msgType, "error") == 0) {
-        // Gateway error received but no debug output
+        Serial.printf("[WS] Server error: %s\n", raw.c_str());
         break;
       }
       break;
@@ -825,6 +827,12 @@ void sendSensorPacket() {
   String json;
   serializeJson(doc, json);
   wsClient.sendTXT(json);
+
+  // sensorSeq was post-incremented above, so the seq we just sent
+  // is (sensorSeq - 1).  Log every 100th packet.
+  if ((sensorSeq - 1) % 100 == 0) {
+    Serial.printf("[WS] Sent seq %u\n", (unsigned)(sensorSeq - 1));
+  }
 }
 
 // ============================================================
