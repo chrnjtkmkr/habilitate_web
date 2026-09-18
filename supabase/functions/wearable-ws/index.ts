@@ -476,6 +476,14 @@ Deno.serve(async (req) => {
       // ---- Write to device_telemetry (primary / raw table) ----
       const insertError = await insertTelemetry(safeBandId, seq, payload);
 
+      // ---- Write to wearable_samples (secondary; best-effort) -
+      // Always attempt even if device_telemetry failed — one table
+      // failing must never block the other.
+      // @ts-ignore
+      EdgeRuntime.waitUntil(
+        insertWearableSample(device.id, safeBandId, seq, payload),
+      );
+
       if (insertError) {
         send(socket, {
           type: "error",
@@ -485,12 +493,6 @@ Deno.serve(async (req) => {
         });
         return;
       }
-
-      // ---- Write to wearable_samples (secondary; best-effort) -
-      // @ts-ignore
-      EdgeRuntime.waitUntil(
-        insertWearableSample(device.id, safeBandId, seq, payload),
-      );
 
       lastSequence = seq;
 
