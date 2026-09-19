@@ -139,6 +139,7 @@
 #define WIFI_STATUS_UUID          "7b7a0005-5a7d-4f4c-9f5e-7a3d6b9e1001"
 #define WIFI_SCAN_REQUEST_UUID    "7b7a0006-5a7d-4f4c-9f5e-7a3d6b9e1001"
 #define WIFI_SCAN_RESULTS_UUID    "7b7a0007-5a7d-4f4c-9f5e-7a3d6b9e1001"
+#define SESSION_STATE_UUID        "7b7a0008-5a7d-4f4c-9f5e-7a3d6b9e1001"
 
 // ============================================================
 // GLOBAL STATE
@@ -152,6 +153,7 @@ BLECharacteristic*   pWifiConfigChar      = nullptr;
 BLECharacteristic*   pWifiStatusChar      = nullptr;
 BLECharacteristic*   pWifiScanRequestChar = nullptr;
 BLECharacteristic*   pWifiScanResultChar  = nullptr;
+BLECharacteristic*   pSessionStateChar    = nullptr;
 
 volatile bool        bleClientConnected   = false;
 volatile bool        wifiScanRequested    = false;
@@ -170,6 +172,8 @@ volatile bool        wsAuthenticated      = false;
 unsigned long        wsLastConnectAttempt = 0;
 
 // --- Session state (drives LED) ---
+// ACTIVE  = WSS authenticated / telemetry session running
+// PAUSED  = session intentionally paused by dashboard
 volatile bool        sessionActive        = false;
 volatile bool        sessionPaused        = false;
 
@@ -757,6 +761,52 @@ class WifiScanRequestCallback : public BLECharacteristicCallbacks {
 };
 
 // ============================================================
+// SESSION STATE CONTROL
+// ============================================================
+// BLE command values:
+//   ACTIVE / RESUME  -> purple constant
+//   PAUSED / PAUSE   -> purple blinking
+//   STOPPED          -> return to WiFi indication
+//
+// WSS authentication also marks the session ACTIVE automatically.
+// This keeps the LED useful even before the dashboard sends an
+// explicit session command.
+
+void applySessionState(const String& command) {
+  String state = command;
+  state.trim();
+  state.toUpperCase();
+
+  if (state == "ACTIVE" || state == "RESUME" || state == "RESUMED") {
+    sessionActive = true;
+    sessionPaused = false;
+    Serial.println("[SESSION] ACTIVE");
+    return;
+  }
+
+  if (state == "PAUSE" || state == "PAUSED") {
+    sessionActive = false;
+    sessionPaused = true;
+    Serial.println("[SESSION] PAUSED");
+    return;
+  }
+
+  if (state == "STOP" || state == "STOPPED" || state == "IDLE") {
+    sessionActive = false;
+    sessionPaused = false;
+    Serial.println("[SESSION] STOPPED");
+    return;
+  }
+}
+
+class SessionStateCallback : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic* pChar) override {
+    String command = pChar->getValue();
+    applySessionState(command);
+  }
+};
+
+// ============================================================
 // WEBSOCKET EVENT HANDLER
 // ============================================================
 
@@ -766,6 +816,8 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t /*length*/) {
     case WStype_DISCONNECTED:
       wsConnected     = false;
       wsAuthenticated = false;
+      sessionActive   = false;
+      sessionPaused   = false;
       Serial.printf("[WS] Disconnected\n");
       break;
 
@@ -785,10 +837,12 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t /*length*/) {
 
       if (strcmp(msgType, "authenticated") == 0) {
         wsAuthenticated = true;
+        if (!sessionPaused) sessionActive = true;
         break;
       }
       if (strcmp(msgType, "device_ready") == 0) {
         wsAuthenticated = true;
+        if (!sessionPaused) sessionActive = true;
         break;
       }
       if (strcmp(msgType, "pong") == 0)  break; // heartbeat — no action
@@ -908,6 +962,12 @@ void setupBLE() {
   pWifiScanResultChar = pService->createCharacteristic(
     WIFI_SCAN_RESULTS_UUID, BLECharacteristic::PROPERTY_NOTIFY);
   pWifiScanResultChar->addDescriptor(new BLE2902());
+
+  // 0x0008 Session State (write)
+  // Dashboard can send: ACTIVE, RESUME, PAUSE, STOPPED
+  pSessionStateChar = pService->createCharacteristic(
+    SESSION_STATE_UUID, BLECharacteristic::PROPERTY_WRITE);
+  pSessionStateChar->setCallbacks(new SessionStateCallback());
 
   pService->start();
 
