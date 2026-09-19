@@ -14,6 +14,7 @@
 //   0x0005  WiFi Status      (read)    CONNECTED|CONNECTING|FAILED|...
 //   0x0006  WiFi Scan Req    (write)   "SCAN"
 //   0x0007  WiFi Scan Result (notify)  JSON network / end / error
+//   0x0008  Session State    (write)   ACTIVE|PAUSE|RESUME|STOPPED
 //
 // BOARD: ESP32S3 Dev Module (select in Arduino IDE)
 //   Tools → USB CDC On Boot: Enabled  (for Serial over USB)
@@ -27,6 +28,21 @@
 //   - SparkFun STTS22H     (by SparkFun Electronics)
 //   - SparkFun MAX3010x    (by SparkFun Electronics)
 //   - Wire                 (built-in)
+//
+// CHANGE LOG (this revision)
+//   - Resolved a merge conflict between two prior edits of the
+//     WS_HOST / connectWebSocket() comment blocks. Both sides said
+//     the same thing; one had literal "\n" typed into a string
+//     instead of real line breaks. No behavior change from this part.
+//   - FIXED: WiFi-drop detection. Previously, once wifiStatus reached
+//     "CONNECTED" nothing in loop() ever re-checked whether the radio
+//     was still actually connected. If WiFi dropped, wifiStatus (and
+//     therefore what the dashboard sees over BLE) stayed stuck on
+//     "CONNECTED" forever, and the WebSocket state (wsConnected /
+//     wsAuthenticated) was never cleared either — so the dashboard
+//     could show "connected" indefinitely after the band lost WiFi.
+//     See the WiFi connection monitor block in loop() below for the
+//     new else-if branch that handles this.
 // ============================================================
 
 #include <Arduino.h>
@@ -1134,8 +1150,23 @@ void loop() {
     wl_status_t wlStatus = WiFi.status();
 
     if (wlStatus == WL_CONNECTED && wifiStatus != "CONNECTED") {
+      // Transition INTO connected.
       setWifiStatus("CONNECTED");
       connectWebSocket();
+    } else if (wlStatus != WL_CONNECTED && wifiStatus == "CONNECTED") {
+      // FIX: WiFi dropped after having been connected. Without this branch,
+      // wifiStatus (and the WS/session flags) stayed stuck on "CONNECTED"
+      // forever, so the dashboard kept showing the band as connected even
+      // after its WiFi actually went down. Reflect reality immediately and
+      // fall back into the normal CONNECTING/retry path below.
+      Serial.println("[WIFI] Connection lost — was CONNECTED, now reconnecting");
+      setWifiStatus("CONNECTING");
+      wsConnected           = false;
+      wsAuthenticated       = false;
+      sessionActive         = false;
+      sessionPaused         = false;
+      wsLastConnectAttempt  = now;
+      savedWifiRetryCount   = 0;
     } else if (wifiStatus == "CONNECTING" && now - wsLastConnectAttempt > WIFI_CONNECT_TIMEOUT_MS) {
       if (savedWifiRetryCount < 1) {
         // Auto-retry once using the persisted credentials.

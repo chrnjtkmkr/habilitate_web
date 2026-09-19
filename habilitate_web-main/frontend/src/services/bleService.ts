@@ -32,6 +32,9 @@ export const WIFI_SCAN_REQUEST_CHARACTERISTIC_UUID =
 export const WIFI_SCAN_RESULTS_CHARACTERISTIC_UUID =
   '7b7a0007-5a7d-4f4c-9f5e-7a3d6b9e1001';
 
+export const SESSION_STATE_CHARACTERISTIC_UUID =
+  '7b7a0008-5a7d-4f4c-9f5e-7a3d6b9e1001';
+
 // ============================================================
 // LOCAL TYPES
 // ============================================================
@@ -387,6 +390,35 @@ export async function readWiFiStatus(
     await characteristic.readValue();
 
   return decodeDataView(value);
+}
+
+// ============================================================
+// SESSION STATE
+// ============================================================
+// The browser sends the therapy-session state over the same
+// already-authorized BLE connection used for device setup.
+// This is control-plane traffic only; sensor streaming remains
+// ESP32 -> Wi-Fi/WSS -> Supabase Edge Function.
+// ============================================================
+
+export type WearableSessionState =
+  | 'ACTIVE'
+  | 'RESUME'
+  | 'PAUSE'
+  | 'STOPPED';
+
+export async function setWearableSessionState(
+  device: HabilitateBluetoothDevice,
+  state: WearableSessionState,
+): Promise<void> {
+  const service = await getHabilitateService(device);
+  const characteristic = await service.getCharacteristic(
+    SESSION_STATE_CHARACTERISTIC_UUID,
+  );
+
+  await characteristic.writeValue(
+    new TextEncoder().encode(state),
+  );
 }
 
 // ============================================================
