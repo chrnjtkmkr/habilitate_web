@@ -135,14 +135,14 @@
 // Orange #FF5A00  → R=255 G=90  B=0
 // Purple #7B2FFF  → R=123 G=47  B=255
 // Blue → WiFi indication
-#define ORANGE_R  0
-#define ORANGE_G  0
-#define ORANGE_B  LED_MAX_DUTY
+#define BLUE_R  0
+#define BLUE_G  0
+#define BLUE_B  LED_MAX_DUTY
 
 // Green → Session indication
-#define PURPLE_R  0
-#define PURPLE_G  LED_MAX_DUTY
-#define PURPLE_B  0
+#define GREEN_R  0
+#define GREEN_G  LED_MAX_DUTY
+#define GREEN_B  0
 
 // ============================================================
 // BLE UUIDs — must match frontend bleService.ts exactly
@@ -187,6 +187,7 @@ WebSocketsClient     wsClient;
 String               wsPath;
 volatile bool        wsConnected          = false;
 volatile bool        wsAuthenticated      = false;
+bool                 wsConnectionStarted  = false;
 unsigned long        wsLastConnectAttempt = 0;
 
 // --- Session state (drives LED) ---
@@ -254,26 +255,26 @@ void updateLED() {
 
   if (sessionActive && !sessionPaused) {
     // Purple constant — session running
-    ledSetRGB(PURPLE_R, PURPLE_G, PURPLE_B);
+    ledSetRGB(GREEN_R, GREEN_G, GREEN_B);
     return;
   }
 
   if (sessionPaused) {
     // Purple blinking — session paused
-    if (blinkOn) ledSetRGB(PURPLE_R, PURPLE_G, PURPLE_B);
+    if (blinkOn) ledSetRGB(GREEN_R, GREEN_G, GREEN_B);
     else         ledOff();
     return;
   }
 
   if (wifiStatus == "CONNECTED") {
     // Orange constant — WiFi up, no active session
-    ledSetRGB(ORANGE_R, ORANGE_G, ORANGE_B);
+    ledSetRGB(BLUE_R, BLUE_G, BLUE_B);
     return;
   }
 
   if (wifiStatus == "CONNECTING") {
     // Orange blinking — waiting for WiFi
-    if (blinkOn) ledSetRGB(ORANGE_R, ORANGE_G, ORANGE_B);
+    if (blinkOn) ledSetRGB(BLUE_R, BLUE_G, BLUE_B);
     else         ledOff();
     return;
   }
@@ -1138,9 +1139,14 @@ void loop() {
   if (!savedSSID.isEmpty() && !wifiScanInProgress) {
     wl_status_t wlStatus = WiFi.status();
 
-    if (wlStatus == WL_CONNECTED && wifiStatus != "CONNECTED") {
-      // Transition INTO connected.
-      setWifiStatus("CONNECTED");
+    if (wlStatus == WL_CONNECTED && !wsConnectionStarted) {
+      // Transition INTO WiFi-connected. Start the WebSocket, but wait for
+      // it to actually authenticate before declaring "CONNECTED" over BLE —
+      // WiFi.status() alone can stay WL_CONNECTED for a while after the
+      // router/internet actually goes down. wsConnectionStarted guards
+      // against calling connectWebSocket() on every loop() iteration
+      // while waiting for authentication.
+      wsConnectionStarted = true;
       connectWebSocket();
     } else if (wlStatus != WL_CONNECTED && wifiStatus == "CONNECTED") {
       // FIX: WiFi dropped after having been connected. Without this branch,
@@ -1152,6 +1158,7 @@ void loop() {
       setWifiStatus("CONNECTING");
       wsConnected           = false;
       wsAuthenticated       = false;
+      wsConnectionStarted   = false;
       sessionActive         = false;
       sessionPaused         = false;
       wsLastConnectAttempt  = now;
@@ -1180,6 +1187,12 @@ void loop() {
   // ── WebSocket maintenance ──────────────────────────────────
   if (WiFi.status() == WL_CONNECTED) {
     wsClient.loop();
+
+    // Only now, once the WebSocket has actually authenticated with
+    // Supabase, do we trust that the internet connection is real.
+    if (wsConnected && wsAuthenticated && wifiStatus != "CONNECTED") {
+      setWifiStatus("CONNECTED");
+    }
 
     if (wsConnected && wsAuthenticated) {
       if (now - lastSensorSend >= SENSOR_INTERVAL_MS) {
