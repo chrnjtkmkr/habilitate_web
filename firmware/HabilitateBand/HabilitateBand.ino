@@ -66,7 +66,7 @@
 
 // Supabase WebSocket endpoint
 #define WS_HOST  "sqjuracvmmuyrdcapehk.supabase.co"
-#define WS_PATH  "/functions/v1/wearable-ws?band_id=" BAND_ID "&token=" DEVICE_TOKEN
+// WS path is built at runtime so the device token is URL-encoded safely.
 
 // Sensor streaming rate
 #define SENSOR_INTERVAL_MS       40    // 25 Hz
@@ -112,7 +112,7 @@
 #define LED_B_PIN       17
 
 #define LED_COMMON_ANODE  0       // 0 = common cathode, 1 = common anode
-#define LED_MAX_DUTY      15      // 0-255; 15 ≈ 6% duty for high battery saving (still clearly visible)
+#define LED_MAX_DUTY      48      // 0-255; ~19% duty: visible while still battery-conscious
 
 // PWM settings
 #define PWM_FREQ  1000   // Hz
@@ -167,6 +167,7 @@ int    savedWifiRetryCount = 0;
 
 // --- WebSocket ---
 WebSocketsClient     wsClient;
+String               wsPath;
 volatile bool        wsConnected          = false;
 volatile bool        wsAuthenticated      = false;
 unsigned long        wsLastConnectAttempt = 0;
@@ -821,10 +822,19 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t /*length*/) {
       Serial.printf("[WS] Disconnected\n");
       break;
 
-    case WStype_CONNECTED:
+    case WStype_CONNECTED: {
       wsConnected = true;
-      Serial.printf("[WS] Connected\n");
+      Serial.printf("[WS] Connected to Supabase Edge Function\n");
+
+      StaticJsonDocument<128> hello;
+      hello["type"] = "device_hello";
+      hello["band_id"] = BAND_ID;
+      String helloJson;
+      serializeJson(hello, helloJson);
+      wsClient.sendTXT(helloJson);
+      Serial.println("[WS] device_hello sent");
       break;
+    }
 
     case WStype_TEXT: {
       String raw = String((char*)payload);
@@ -837,12 +847,12 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t /*length*/) {
 
       if (strcmp(msgType, "authenticated") == 0) {
         wsAuthenticated = true;
-        if (!sessionPaused) sessionActive = true;
+        Serial.println("[WS] Supabase authentication accepted");
         break;
       }
       if (strcmp(msgType, "device_ready") == 0) {
         wsAuthenticated = true;
-        if (!sessionPaused) sessionActive = true;
+        Serial.println("[WS] Device ready");
         break;
       }
       if (strcmp(msgType, "pong") == 0)  break; // heartbeat — no action
@@ -867,14 +877,44 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t /*length*/) {
 // CONNECT WEBSOCKET
 // ============================================================
 
+String urlEncode(const String& input) {
+  const char hex[] = "0123456789ABCDEF";
+  String encoded;
+  encoded.reserve(input.length() + 16);
+
+  for (size_t i = 0; i < input.length(); ++i) {
+    const uint8_t c = static_cast<uint8_t>(input[i]);
+
+    if ((c >= 'a' && c <= 'z') ||
+        (c >= 'A' && c <= 'Z') ||
+        (c >= '0' && c <= '9') ||
+        c == '-' || c == '_' || c == '.' || c == '~') {
+      encoded += static_cast<char>(c);
+    } else {
+      encoded += '%';
+      encoded += hex[(c >> 4) & 0x0F];
+      encoded += hex[c & 0x0F];
+    }
+  }
+
+  return encoded;
+}
+
 void connectWebSocket() {
   if (WiFi.status() != WL_CONNECTED) return;
 
+  wsPath = String("/functions/v1/wearable-ws?band_id=") +
+           urlEncode(BAND_ID) +
+           "&token=" +
+           urlEncode(DEVICE_TOKEN);
+
   wsClient.onEvent(onWsEvent);
-  wsClient.beginSSL(WS_HOST, 443, WS_PATH);
+  wsClient.beginSSL(WS_HOST, 443, wsPath.c_str());
   wsClient.setReconnectInterval(WS_RECONNECT_INTERVAL_MS);
   wsClient.enableHeartbeat(15000, 3000, 2);
   wsLastConnectAttempt = millis();
+
+  Serial.println("[WS] Connecting to Supabase Edge Function...");
 }
 
 // ============================================================
@@ -1003,6 +1043,7 @@ void setupLED() {
 void setup() {
   Serial.begin(115200);
   delay(500);
+  Serial.println("[BOOT] HabilitateBand starting");
 
   // LED — initialise first so the user gets visual feedback immediately
   setupLED();
@@ -1025,6 +1066,12 @@ void setup() {
   loadSavedWiFiCredentials();
 
   setupBLE();
+
+  Serial.printf("[BOOT] Sensors MPU=%s STTS22H=%s MAX30102=%s\n",
+                mpuFound ? "OK" : "MISSING",
+                sttsFound ? "OK" : "MISSING",
+                max30102Found ? "OK" : "MISSING");
+  Serial.println("[BOOT] BLE ready; Wi-Fi/WSS pipeline running");
 }
 
 // ============================================================
