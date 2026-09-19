@@ -54,6 +54,7 @@
 #include <WiFi.h>
 #include <Preferences.h>
 #include <WebSocketsClient.h>
+#include <Adafruit_NeoPixel.h>
 
 // Disable unused features to save flash space
 #define ARDUINOJSON_USE_LONG_LONG 0
@@ -125,27 +126,23 @@
 // (0–255).  50/255 ≈ 20 % duty cycle keeps the LED clearly
 // visible while drawing ~80 % less current than full bright.
 // ============================================================
-#define LED_R_PIN       15
-#define LED_G_PIN       16
-#define LED_B_PIN       17
+#define LED_PIN         38    // onboard WS2812 (try 48 if 38 doesn't light up)
+#define LED_COUNT       1
 
-#define LED_COMMON_ANODE  0       // 0 = common cathode, 1 = common anode
 #define LED_MAX_DUTY      48      // 0-255; ~19% duty: visible while still battery-conscious
-
-// PWM settings
-#define PWM_FREQ  1000   // Hz
-#define PWM_RES   8      // bits (0-255)
 
 // Colour presets — scaled to LED_MAX_DUTY at definition time
 // Orange #FF5A00  → R=255 G=90  B=0
 // Purple #7B2FFF  → R=123 G=47  B=255
-#define ORANGE_R  (uint8_t)(255 * LED_MAX_DUTY / 255)
-#define ORANGE_G  (uint8_t)( 90 * LED_MAX_DUTY / 255)
-#define ORANGE_B  0
+// Blue → WiFi indication
+#define ORANGE_R  0
+#define ORANGE_G  0
+#define ORANGE_B  LED_MAX_DUTY
 
-#define PURPLE_R  (uint8_t)(123 * LED_MAX_DUTY / 255)
-#define PURPLE_G  (uint8_t)( 47 * LED_MAX_DUTY / 255)
-#define PURPLE_B  (uint8_t)(255 * LED_MAX_DUTY / 255)
+// Green → Session indication
+#define PURPLE_R  0
+#define PURPLE_G  LED_MAX_DUTY
+#define PURPLE_B  0
 
 // ============================================================
 // BLE UUIDs — must match frontend bleService.ts exactly
@@ -172,6 +169,8 @@ BLECharacteristic*   pWifiStatusChar      = nullptr;
 BLECharacteristic*   pWifiScanRequestChar = nullptr;
 BLECharacteristic*   pWifiScanResultChar  = nullptr;
 BLECharacteristic*   pSessionStateChar    = nullptr;
+
+Adafruit_NeoPixel pixel(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 volatile bool        bleClientConnected   = false;
 volatile bool        wifiScanRequested    = false;
@@ -219,16 +218,8 @@ struct SensorReading {
 // ============================================================
 
 void ledSetRGB(uint8_t r, uint8_t g, uint8_t b) {
-  if (LED_COMMON_ANODE) {
-    // Common anode: invert so 0 duty = full on, 255 = off
-    ledcWrite(LED_R_PIN, 255 - r);
-    ledcWrite(LED_G_PIN, 255 - g);
-    ledcWrite(LED_B_PIN, 255 - b);
-  } else {
-    ledcWrite(LED_R_PIN, r);
-    ledcWrite(LED_G_PIN, g);
-    ledcWrite(LED_B_PIN, b);
-  }
+  pixel.setPixelColor(0, pixel.Color(r, g, b));
+  pixel.show();
 }
 
 void ledOff() {
@@ -1059,10 +1050,8 @@ void setupBLE() {
 // ============================================================
 
 void setupLED() {
-  // ledcAttach(pin, freq_hz, resolution_bits)
-  ledcAttach(LED_R_PIN, PWM_FREQ, PWM_RES);
-  ledcAttach(LED_G_PIN, PWM_FREQ, PWM_RES);
-  ledcAttach(LED_B_PIN, PWM_FREQ, PWM_RES);
+  pixel.begin();
+  pixel.setBrightness(LED_MAX_DUTY);  // reuse existing brightness cap
   ledOff();
 }
 
