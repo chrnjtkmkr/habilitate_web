@@ -161,6 +161,7 @@ Preferences wifiPreferences;
 String savedSSID     = "";
 String savedPassword = "";
 String wifiStatus    = "NO_CREDENTIALS";
+int    savedWifiRetryCount = 0;
 
 // --- WebSocket ---
 WebSocketsClient     wsClient;
@@ -639,6 +640,7 @@ void loadSavedWiFiCredentials() {
     return;
   }
 
+  savedWifiRetryCount = 0;
   setWifiStatus("CONNECTING");
   WiFi.begin(savedSSID.c_str(), savedPassword.c_str());
   wsLastConnectAttempt = millis();
@@ -995,6 +997,7 @@ void loop() {
     savedSSID     = pendingWifi.ssid;
     savedPassword = pendingWifi.password;
     saveWiFiCredentials(savedSSID, savedPassword);
+    savedWifiRetryCount = 0;
 
     // Do not erase NVS credentials during a reconnect attempt.
     // BLE provisioning has already supplied the new credentials.
@@ -1013,10 +1016,14 @@ void loop() {
       setWifiStatus("CONNECTED");
       connectWebSocket();
     } else if (wifiStatus == "CONNECTING" && now - wsLastConnectAttempt > WIFI_CONNECT_TIMEOUT_MS) {
-      if (pendingWifi.retryCount < 1) {
-        // Auto-retry once
-        pendingWifi.retryCount++;
-        pendingWifi.requested = true;
+      if (savedWifiRetryCount < 1) {
+        // Auto-retry once using the persisted credentials.
+        savedWifiRetryCount++;
+        WiFi.disconnect(false);
+        delay(100);
+        WiFi.mode(WIFI_STA);
+        WiFi.begin(savedSSID.c_str(), savedPassword.c_str());
+        wsLastConnectAttempt = now;
         setWifiStatus("CONNECTING");
       } else {
         setWifiStatus("FAILED");
