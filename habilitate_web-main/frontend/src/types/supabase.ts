@@ -9,6 +9,96 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      device_telemetry: {
+        Row: {
+          id: string
+          band_id: string
+          seq: number
+          t: number
+          ax: number
+          ay: number
+          az: number
+          gx: number
+          gy: number
+          gz: number
+          temp: number
+          hr: number | null
+          hrv: number | null
+          spo2: number | null
+          gsr: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          band_id: string
+          seq: number
+          t: number
+          ax: number
+          ay: number
+          az: number
+          gx: number
+          gy: number
+          gz: number
+          temp: number
+          hr?: number | null
+          hrv?: number | null
+          spo2?: number | null
+          gsr: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          band_id?: string
+          seq?: number
+          t?: number
+          ax?: number
+          ay?: number
+          az?: number
+          gx?: number
+          gy?: number
+          gz?: number
+          temp?: number
+          hr?: number | null
+          hrv?: number | null
+          spo2?: number | null
+          gsr?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
+      wearable_metrics: {
+        Row: {
+          id: string
+          telemetry_id: string
+          band_id: string
+          seq: number
+          acceleration_magnitude: number
+          rotation_magnitude: number
+          movement_index: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          telemetry_id: string
+          band_id: string
+          seq: number
+          acceleration_magnitude: number
+          rotation_magnitude: number
+          movement_index: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          telemetry_id?: string
+          band_id?: string
+          seq?: number
+          acceleration_magnitude?: number
+          rotation_magnitude?: number
+          movement_index?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
       activities: {
         Row: {
           center_id: string | null
