@@ -377,7 +377,7 @@ export default function SessionRun() {
     }
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [phase]);
+  }, [phase, syncBandSessionState]);
 
   // Whenever the live phase starts (including session resume after refresh),
   // put the band into ACTIVE state. This is intentionally best-effort because
