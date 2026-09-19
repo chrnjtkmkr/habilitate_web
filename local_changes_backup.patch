@@ -1,0 +1,55 @@
+diff --git a/firmware/HabilitateBand/secrets.example.h b/firmware/HabilitateBand/secrets.example.h
+deleted file mode 100644
+index ed3038a..0000000
+--- a/firmware/HabilitateBand/secrets.example.h
++++ /dev/null
+@@ -1,4 +0,0 @@
+-// Copy this file to secrets.h and replace the placeholder with
+-// the real device token before flashing.
+-#define DEVICE_TOKEN "CHANGE_ME_BEFORE_FLASHING"
+-#define DEVICE_TOKEN_IS_PLACEHOLDER 1  // Delete this line after setting the real token
+diff --git a/frontend/.env.example b/frontend/.env.example
+deleted file mode 100644
+index 9847842..0000000
+--- a/frontend/.env.example
++++ /dev/null
+@@ -1,3 +0,0 @@
+-# PUBLIC keys — safe for the browser
+-VITE_SUPABASE_URL=
+-VITE_SUPABASE_ANON_KEY=
+diff --git a/frontend/src/lib/supabase.ts b/frontend/src/lib/supabase.ts
+index e6dab6a..aa9c97c 100644
+--- a/frontend/src/lib/supabase.ts
++++ b/frontend/src/lib/supabase.ts
+@@ -1,5 +1,5 @@
+ import { createClient } from '@supabase/supabase-js';
+-import type { Database } from '../types/supabase';
++import type { Database } from '../types/supabase.generated';
+ 
+ const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+ const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+diff --git a/habilitate_web-main/iot-gateway/.env.example b/habilitate_web-main/iot-gateway/.env.example
+deleted file mode 100644
+index 04e5da0..0000000
+--- a/habilitate_web-main/iot-gateway/.env.example
++++ /dev/null
+@@ -1,19 +0,0 @@
+-# ============================================================
+-# Habilitate IoT Gateway — environment variables
+-# Copy this file to .env and fill in the values.
+-# NEVER commit .env to source control.
+-# ============================================================
+-
+-# Supabase project URL (from Settings → API)
+-SUPABASE_URL=https://your-project.supabase.co
+-
+-# Service-role key — bypasses RLS for server-side inserts.
+-# Found in Settings → API → service_role.
+-# Keep this secret. Never expose it to the browser.
+-SUPABASE_SERVICE_ROLE_KEY=your-service-role-key-here
+-
+-# Port the gateway WebSocket server listens on (default: 8080)
+-PORT=8080
+-
+-# Host to bind to (default: 0.0.0.0 = all interfaces)
+-HOST=0.0.0.0
