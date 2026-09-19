@@ -246,14 +246,45 @@ async function insertWearableSample(
   });
 
   if (error) {
-    // wearable_samples may not yet exist on all environments.
-    // Log the error but do not fail the whole request — the
-    // device_telemetry insert is the critical path.
     console.warn(
       `[DB] wearable_samples insert failed — band=${bandId} seq=${seq}:`,
       error.message,
     );
   }
+}
+
+async function broadcastTelemetry(
+  bandId: string,
+  payload: SensorPayload,
+): Promise<void> {
+  const channel = supabase.channel(`telemetry:${bandId}`);
+  const result = await channel.send({
+    type: "broadcast",
+    event: "telemetry",
+    payload: {
+      band_id: bandId,
+      seq: payload.seq,
+      t: payload.t,
+      ax: payload.ax ?? null,
+      ay: payload.ay ?? null,
+      az: payload.az ?? null,
+      gx: payload.gx ?? null,
+      gy: payload.gy ?? null,
+      gz: payload.gz ?? null,
+      temp: payload.temp ?? null,
+      hr: sensorOrNull(payload.hr),
+      hrv: sensorOrNull(payload.hrv),
+      spo2: sensorOrNull(payload.spo2),
+      gsr: payload.gsr ?? null,
+      received_at: new Date().toISOString(),
+    },
+  });
+
+  if (result !== "ok") {
+    console.warn(`[RT] Broadcast failed for ${bandId}: ${result}`);
+  }
+
+  await supabase.removeChannel(channel);
 }
 
 // ============================================================
@@ -495,6 +526,11 @@ Deno.serve(async (req) => {
       }
 
       lastSequence = seq;
+
+      // Realtime fan-out is live transport for the dashboard; the
+      // database insert above remains the durable source of record.
+      // Fire it before the ACK so the device can keep streaming.
+      EdgeRuntime.waitUntil(broadcastTelemetry(safeBandId, payload));
 
       send(socket, { type: "ack", seq, accepted: true, server_time: Date.now() });
       return;
