@@ -36,6 +36,7 @@
 #include <BLEUtils.h>
 #include <BLE2902.h>
 #include <WiFi.h>
+#include <Preferences.h>
 #include <WebSocketsClient.h>
 
 // Disable unused features to save flash space
@@ -156,6 +157,7 @@ volatile bool        bleClientConnected   = false;
 volatile bool        wifiScanRequested    = false;
 
 // --- WiFi / Credentials ---
+Preferences wifiPreferences;
 String savedSSID     = "";
 String savedPassword = "";
 String wifiStatus    = "NO_CREDENTIALS";
@@ -626,6 +628,31 @@ void setWifiStatus(const String& status) {
   }
 }
 
+void loadSavedWiFiCredentials() {
+  wifiPreferences.begin("wifi", true);
+  savedSSID = wifiPreferences.getString("ssid", "");
+  savedPassword = wifiPreferences.getString("password", "");
+  wifiPreferences.end();
+
+  if (savedSSID.isEmpty()) {
+    setWifiStatus("NO_CREDENTIALS");
+    return;
+  }
+
+  setWifiStatus("CONNECTING");
+  WiFi.begin(savedSSID.c_str(), savedPassword.c_str());
+  wsLastConnectAttempt = millis();
+  Serial.println("[WIFI] Saved credentials found; reconnecting automatically");
+}
+
+void saveWiFiCredentials(const String& ssid, const String& password) {
+  wifiPreferences.begin("wifi", false);
+  wifiPreferences.putString("ssid", ssid);
+  wifiPreferences.putString("password", password);
+  wifiPreferences.end();
+  Serial.println("[WIFI] Credentials saved to NVS");
+}
+
 // ============================================================
 // WIFI SCAN RESULTS — helper to push one JSON chunk over BLE
 // ============================================================
@@ -933,8 +960,7 @@ void setup() {
   // WiFi radio in STA mode before BLE starts — required so that
   // WiFi.scanNetworks() works without coexistence conflicts.
   WiFi.mode(WIFI_STA);
-  WiFi.disconnect(true);
-  delay(200);
+  loadSavedWiFiCredentials();
 
   setupBLE();
 }
@@ -968,11 +994,12 @@ void loop() {
     pendingWifi.requested = false;
     savedSSID     = pendingWifi.ssid;
     savedPassword = pendingWifi.password;
+    saveWiFiCredentials(savedSSID, savedPassword);
 
-    // Full reset clears any stale WL_CONNECT_FAILED from a prior
-    // attempt or scan before the status monitor reads it.
-    WiFi.disconnect(true);
-    delay(500); // Increased delay for full radio reset
+    // Do not erase NVS credentials during a reconnect attempt.
+    // BLE provisioning has already supplied the new credentials.
+    WiFi.disconnect(false);
+    delay(100);
     WiFi.mode(WIFI_STA);
     WiFi.begin(savedSSID.c_str(), savedPassword.c_str());
     wsLastConnectAttempt = now;

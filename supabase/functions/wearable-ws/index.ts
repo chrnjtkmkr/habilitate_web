@@ -246,9 +246,6 @@ async function insertWearableSample(
   });
 
   if (error) {
-    // wearable_samples may not yet exist on all environments.
-    // Log the error but do not fail the whole request — the
-    // device_telemetry insert is the critical path.
     console.warn(
       `[DB] wearable_samples insert failed — band=${bandId} seq=${seq}:`,
       error.message,
@@ -495,6 +492,9 @@ Deno.serve(async (req) => {
       }
 
       lastSequence = seq;
+
+            // Realtime is driven by the database insert above. Supabase Realtime
+      // streams the new row to authenticated dashboard subscribers.
 
       send(socket, { type: "ack", seq, accepted: true, server_time: Date.now() });
       return;

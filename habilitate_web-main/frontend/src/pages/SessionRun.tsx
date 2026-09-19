@@ -26,6 +26,7 @@ import { getDomainIcon, getSimplifiedGoal, getHelpLadder, pickField, pickArrayFi
 import { useActivityLookup } from '../lib/queries/activities';
 import ActivityPicker from '../components/ActivityPicker';
 import DeviceSetupCard from '../components/device/DeviceSetupCard';
+import { useWearableTelemetry } from '../hooks/useWearableTelemetry';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import Pill from '../components/Pill';
@@ -92,6 +93,37 @@ export default function SessionRun() {
   const stepResponsesRef = useRef(stepResponses);
   useEffect(() => { stepResponsesRef.current = stepResponses; }, [stepResponses]);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const [wearableBandId, setWearableBandId] = useState<string | null>(() => {
+    try {
+      return localStorage.getItem('habilitate.bandId');
+    } catch {
+      return null;
+    }
+  });
+  const { telemetry, metrics: wearableMetrics, realtimeStatus: wearableRealtimeStatus } =
+    useWearableTelemetry(wearableBandId);
+
+  // DeviceSetupCard owns the BLE connection. It persists the selected band ID
+  // in localStorage, so SessionRun can consume Wi-Fi/WSS telemetry without
+  // creating a second Bluetooth connection.
+  useEffect(() => {
+    let active = true;
+    const syncBandId = () => {
+      try {
+        const id = localStorage.getItem('habilitate.bandId');
+        if (active) setWearableBandId(id);
+      } catch {
+        // Ignore localStorage errors.
+      }
+    };
+
+    syncBandId();
+    const timer = window.setInterval(syncBandId, 500);
+    return () => {
+      active = false;
+      window.clearInterval(timer);
+    };
+  }, []);
   const [showMetrics, setShowMetrics] = useState(false);
   const [narrowHintDismissed] = useState(() => localStorage.getItem('habilitate_narrow_hint_dismissed') === '1');
 
@@ -812,6 +844,33 @@ export default function SessionRun() {
           <div className="space-y-4">
             {/* Habilitate Therapy Band */}
             <DeviceSetupCard />
+
+            {/* Live wearable telemetry */}
+            {wearableBandId && (
+              <div className="rounded-2xl border border-border bg-surface p-4">
+                <div className="flex items-center justify-between">
+                  <h3 className="font-medium text-ink-primary">Live wearable data</h3>
+                  <Pill variant={wearableRealtimeStatus === 'SUBSCRIBED' ? 'success' : 'warning'}>
+                    {wearableRealtimeStatus === 'SUBSCRIBED' ? 'Realtime' : wearableRealtimeStatus}
+                  </Pill>
+                </div>
+                <p className="mt-1 text-xs text-ink-secondary">
+                  Band {wearableBandId} · Wi-Fi → WSS → Edge Function → Supabase Realtime
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4">
+                  <TelemetryValue label="Heart rate" value={telemetry?.hr != null ? `${Math.round(telemetry.hr)} BPM` : '—'} />
+                  <TelemetryValue label="SpO₂" value={telemetry?.spo2 != null ? `${Math.round(telemetry.spo2)}%` : '—'} />
+                  <TelemetryValue label="Temperature" value={telemetry?.temp != null ? `${telemetry.temp.toFixed(1)}°C` : '—'} />
+                  <TelemetryValue label="GSR" value={telemetry?.gsr != null ? Math.round(telemetry.gsr).toString() : '—'} />
+                </div>
+                <div className="mt-2 grid grid-cols-3 gap-2">
+                  <TelemetryValue label="Acceleration" value={wearableMetrics ? wearableMetrics.acceleration_magnitude.toFixed(2) : '—'} />
+                  <TelemetryValue label="Rotation" value={wearableMetrics ? wearableMetrics.rotation_magnitude.toFixed(2) : '—'} />
+                  <TelemetryValue label="Movement index" value={wearableMetrics ? wearableMetrics.movement_index.toFixed(2) : '—'} />
+                </div>
+              </div>
+            )}
+
             {/* Camera & Microphone */}
             <div className="rounded-2xl border border-border bg-surface p-4">
               <div className="flex items-center justify-between">
@@ -1377,6 +1436,26 @@ export default function SessionRun() {
             its media stream active. */}
         <div className={`shrink-0 flex flex-col gap-3 overflow-y-auto lg:w-[440px] ${showMetrics ? '' : 'invisible h-0 overflow-hidden lg:visible lg:h-auto lg:overflow-y-auto'}`}>
 
+          {/* Wearable telemetry */}
+          <div style={S.card} className="p-4 shrink-0">
+            <div className="flex items-center justify-between mb-2">
+              <p style={S.label}>Wearable telemetry</p>
+              <span className="text-[11px]" style={{ color: wearableRealtimeStatus === 'SUBSCRIBED' ? '#0D9F7E' : '#9C9C95' }}>
+                {wearableRealtimeStatus === 'SUBSCRIBED' ? 'LIVE' : wearableRealtimeStatus}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <MetricTile label="HR" value={telemetry?.hr != null ? `${Math.round(telemetry.hr)} BPM` : '—'} />
+              <MetricTile label="SpO₂" value={telemetry?.spo2 != null ? `${Math.round(telemetry.spo2)}%` : '—'} />
+              <MetricTile label="Temp" value={telemetry?.temp != null ? `${telemetry.temp.toFixed(1)}°C` : '—'} />
+              <MetricTile label="GSR" value={telemetry?.gsr != null ? Math.round(telemetry.gsr).toString() : '—'} />
+            </div>
+            <div className="mt-2 text-[11px]" style={S.text3}>
+              Motion {wearableMetrics?.movement_index != null ? wearableMetrics.movement_index.toFixed(2) : '—'}
+              {' · '}seq {telemetry?.seq ?? '—'}
+            </div>
+          </div>
+
           {/* Card 1: Live Camera */}
           <div style={S.card} className="p-4 shrink-0">
             <p style={S.label} className="mb-2">{t('live_camera_label')}{isPaused && <span className="ml-2 normal-case tracking-normal text-[10px]" style={{ color: '#A5A5F0' }}>{t('values_frozen')}</span>}</p>
@@ -1695,6 +1774,24 @@ export default function SessionRun() {
           );
         })()}
       </Modal>
+    </div>
+  );
+}
+
+function TelemetryValue({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-xl border border-border bg-background p-3">
+      <p className="text-[11px] text-ink-secondary">{label}</p>
+      <p className="mt-1 text-sm font-semibold text-ink-primary">{value}</p>
+    </div>
+  );
+}
+
+function MetricTile({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="rounded-lg p-2" style={{ backgroundColor: '#F8F8FC' }}>
+      <p className="text-[10px]" style={{ color: '#9C9C95' }}>{label}</p>
+      <p className="mt-0.5 text-[14px] font-semibold" style={{ color: '#1B1B2E' }}>{value}</p>
     </div>
   );
 }
