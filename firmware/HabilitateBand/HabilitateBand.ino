@@ -814,6 +814,16 @@ class SessionStateCallback : public BLECharacteristicCallbacks {
 void onWsEvent(WStype_t type, uint8_t* payload, size_t /*length*/) {
   switch (type) {
 
+    case WStype_ERROR:
+      Serial.printf("[WS] WebSocket/TLS error");
+      if (payload) {
+        Serial.printf(": %s", (char*)payload);
+      }
+      Serial.println();
+      wsConnected     = false;
+      wsAuthenticated = false;
+      break;
+
     case WStype_DISCONNECTED:
       wsConnected     = false;
       wsAuthenticated = false;
