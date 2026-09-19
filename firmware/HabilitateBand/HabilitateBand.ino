@@ -65,8 +65,8 @@
 #endif
 
 // Supabase WebSocket endpoint
-#define WS_HOST  "sqjuracvmmuyrdcapehk.supabase.co"
-// WS path is built at runtime so the device token is URL-encoded safely.
+#define WS_HOST  "sqjuracvmmuyrdcapehk.functions.supabase.co"
+// Supabase Edge Functions also expose the function on the dedicated functions host.\n// Use that host for WSS; the standard /functions/v1 gateway URL is HTTP-oriented.\n// WS path is built at runtime so the device token is URL-encoded safely.
 
 // Sensor streaming rate
 #define SENSOR_INTERVAL_MS       40    // 25 Hz
@@ -909,12 +909,12 @@ void connectWebSocket() {
            urlEncode(DEVICE_TOKEN);
 
   wsClient.onEvent(onWsEvent);
-  wsClient.beginSSL(WS_HOST, 443, wsPath.c_str());
+  // Supabase Edge Functions supports the dedicated functions host for function endpoints.\n  // Keep the WSS connection on the functions host so the WebSocket upgrade reaches\n  // the Edge Function runtime directly.\n  wsClient.beginSSL(WS_HOST, 443, wsPath.c_str(), nullptr, "");
   wsClient.setReconnectInterval(WS_RECONNECT_INTERVAL_MS);
   wsClient.enableHeartbeat(15000, 3000, 2);
   wsLastConnectAttempt = millis();
 
-  Serial.println("[WS] Connecting to Supabase Edge Function...");
+  Serial.printf("[WS] Connecting to Supabase Edge Function: %s:443%s\\n", WS_HOST, wsPath.c_str());
 }
 
 // ============================================================
