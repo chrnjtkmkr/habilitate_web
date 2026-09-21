@@ -80,7 +80,7 @@
 // CONFIGURATION — edit these
 // ============================================================
 
-#define FIRMWARE_VERSION "0.4.4"
+#define FIRMWARE_VERSION "0.4.5"
 
 // Per-band identity (BAND_ID + DEVICE_TOKEN) comes from secrets.h
 // (gitignored). Every physical band needs its own values; see
@@ -158,7 +158,17 @@ char chipMac[18] = "00:00:00:00:00:00";
 // Colours are full scale; pixel.setBrightness(LED_MAX_DUTY) caps
 // the output to save battery while keeping the LED visible.
 // ============================================================
-#define LED_PIN         38    // onboard WS2812 on DevKitC-1 v1.1 (v1.0 boards use 48)
+// The LED pin comes from the board selected in the Arduino IDE
+// ("ESP32S3 Dev Module" defines PIN_RGB_LED as 48). A board that wires
+// its LED elsewhere (Espressif's DevKitC-1 v1.1 uses 38) can override
+// it by defining LED_PIN above this line.
+#ifndef LED_PIN
+  #ifdef PIN_RGB_LED
+    #define LED_PIN PIN_RGB_LED
+  #else
+    #define LED_PIN 48
+  #endif
+#endif
 #define LED_COUNT       1
 
 #define LED_MAX_DUTY      48      // 0-255; ~19% duty: visible while still battery-conscious
@@ -1548,8 +1558,8 @@ void setupBLE() {
 
 // Red, green, blue at boot, before anything else can affect the LED.
 // If this is not visible, the problem is the pin or the hardware, not
-// the state logic: DevKitC-1 v1.1 uses GPIO 38, v1.0 and many clones
-// use GPIO 48, and some clones need their RGB solder jumper closed.
+// the state logic: check LED_PIN against the board, and on some clones
+// the RGB solder jumper must be closed.
 void setupLED() {
   pixel.begin();
   pixel.setBrightness(LED_MAX_DUTY);

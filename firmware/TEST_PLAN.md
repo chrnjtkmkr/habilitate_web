@@ -9,7 +9,7 @@ lines.
 Every recorded run must include the identity line printed at boot:
 
 ```
-[BOOT] HAB-001 firmware 0.4.4 mac 24:58:7C:XX:XX:XX
+[BOOT] HAB-001 firmware 0.4.5 mac 24:58:7C:XX:XX:XX
 [BOOT] Reset reason: POWERON
 ```
 
@@ -30,7 +30,7 @@ Check the LED at every step marked **LED:** below. A wrong LED state
 fails the step, even if the log looks right.
 
 At every boot the LED shows red, green, then blue (250 ms each), and the
-log prints `[LED] Self-test on GPIO 38: red, green, blue`. If that
+log prints `[LED] Self-test on GPIO 48: red, green, blue`. If that
 sequence does not appear, stop: the LED pin or hardware is wrong, and
 none of the LED checks below mean anything until it is fixed.
 
