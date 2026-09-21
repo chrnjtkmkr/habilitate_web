@@ -80,7 +80,7 @@
 // CONFIGURATION — edit these
 // ============================================================
 
-#define FIRMWARE_VERSION "0.4.2"
+#define FIRMWARE_VERSION "0.4.3"
 
 // Per-band identity (BAND_ID + DEVICE_TOKEN) comes from secrets.h
 // (gitignored). Every physical band needs its own values; see
@@ -301,7 +301,9 @@ void ledOff() {
 // session state without using delay().
 //
 // Priority (highest first):
-//   Purple solid     → session active (also after RESUME)
+//   Purple/orange    → session active but NOT streaming (Wi-Fi or
+//   alternating        server lost): data is not being recorded
+//   Purple solid     → session active and streaming (also after RESUME)
 //   Purple blinking  → session paused
 //   Orange solid     → Wi-Fi connected: joined and streaming to the
 //                      server (NetState::Online)
@@ -327,7 +329,14 @@ void updateLED() {
   }
 
   if (sessionActive && !sessionPaused) {
-    ledSetRGB(PURPLE_R, PURPLE_G, PURPLE_B);
+    if (netState == NetState::Online) {
+      ledSetRGB(PURPLE_R, PURPLE_G, PURPLE_B);
+    } else if (blinkOn) {
+      // Never off, so it can't be mistaken for either blink pattern.
+      ledSetRGB(PURPLE_R, PURPLE_G, PURPLE_B);
+    } else {
+      ledSetRGB(ORANGE_R, ORANGE_G, ORANGE_B);
+    }
     return;
   }
 

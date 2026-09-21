@@ -9,7 +9,7 @@ lines.
 Every recorded run must include the identity line printed at boot:
 
 ```
-[BOOT] HAB-001 firmware 0.4.2 mac 24:58:7C:XX:XX:XX
+[BOOT] HAB-001 firmware 0.4.3 mac 24:58:7C:XX:XX:XX
 ```
 
 A run without it doesn't count: we can't tell which band or firmware
@@ -28,12 +28,13 @@ fails the step, even if the log looks right.
 | No Wi-Fi credentials stored | Off |
 | Waiting for Wi-Fi: joining, retrying, or joined but the server is not reachable yet | Orange blinking (1 Hz) |
 | Wi-Fi connected and streaming (`CONNECTED`) | Orange solid |
-| Session active (dashboard sent ACTIVE or RESUME) | Purple solid |
+| Session active and streaming (dashboard sent ACTIVE or RESUME) | Purple solid |
+| Session active but NOT streaming (Wi-Fi or server lost) | Purple/orange alternating (1 Hz, never off) |
 | Session paused | Purple blinking (1 Hz) |
 
-Session colours take priority over Wi-Fi colours. So during an active
-session the LED does not show a Wi-Fi loss; C3 step 3 records how that
-case shows up on the dashboard.
+Session colours take priority over plain Wi-Fi colours. But an active
+session that stops streaming alternates purple and orange, so a therapist
+can see that data is not being recorded.
 
 Setup: flash from this repo (see PROVISIONING.md), open the dashboard in
 Chrome, and connect to the band from Session → Therapy band.
@@ -86,9 +87,11 @@ in the middle of a join attempt (right after a `CONNECTING`).
    **LED:** orange solid → orange blinking within a few seconds.
 2. After 2+ minutes, turn it back on. Expect `CONNECTED` within about
    30 s, with no power cycle. **LED:** back to orange solid.
-3. Repeat step 1 during an active session. **LED:** stays purple solid
-   (session colour wins; see the note in the LED reference). Record how
-   the loss shows up on the dashboard.
+3. Repeat step 1 during an active session. **LED:** purple solid →
+   purple/orange alternating within a few seconds of the hotspot going
+   off, and back to purple solid within about 30 s of it returning. The
+   session itself must not end. Also record how the loss shows up on the
+   dashboard.
 
 ## C4. Failure reporting
 
@@ -124,8 +127,13 @@ retries resume afterwards.
 Leave the band streaming for 1 hour during a mock session. Note every
 `[WS] Disconnected` and how long each takes to return to `CONNECTED`,
 and confirm there are no reboots (`[BOOT]` must appear only once).
-**LED:** purple solid for the whole hour. A server reconnect must not
-change it; before 0.4.0 every WebSocket drop reset the session LED.
 Expect periodic WebSocket drops caused by the Supabase Edge Function
 time limit; these are addressed by the transport work, not by this
 change.
+
+**LED:** purple solid, except during each WebSocket drop, when it
+alternates purple/orange until `CONNECTED` returns (normally under
+10 s), then goes back to purple solid. A drop must never end the session
+or leave the LED off, orange, or purple-blinking; before 0.4.0 every
+drop reset the session LED. Record the number and length of the
+alternating episodes: they should match the `[WS] Disconnected` count.
