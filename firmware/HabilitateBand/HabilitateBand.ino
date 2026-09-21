@@ -435,6 +435,24 @@ uint32_t     ambientIR         = 2000;
 const uint32_t FINGER_MARGIN   = 8000;
 bool         fingerPresent     = false;
 unsigned long lastFingerSeenMs = 0;
+unsigned long lastValidReadingMs = 0;
+#define READING_STALE_MS 5000
+
+// ---- Beat-to-beat interval tracking (for HRV / RMSSD) ----
+#define IBI_HISTORY_SIZE   12
+#define MIN_IBI_MS         270
+#define MAX_IBI_MS         2000
+#define PEAK_THRESHOLD_FRAC 0.35f
+
+float         dcTracker        = 0.0f;
+float         acEnvelope       = 50.0f;
+float         prevAC1          = 0.0f;
+float         prevAC2          = 0.0f;
+unsigned long lastPeakMs       = 0;
+unsigned long ibiHistory[IBI_HISTORY_SIZE];
+int           ibiCount         = 0;
+unsigned long detectorStartMs  = 0;
+#define DC_SETTLE_MS 1000
 
 // 4-tap moving-average pre-filter (reduces HF noise before analysis)
 uint32_t irTaps[4]  = {0, 0, 0, 0};
@@ -485,12 +503,93 @@ int medianOfHistory(int* arr, int count) {
   return sorted[count / 2];
 }
 
+// ============================================================
+// PULSE PEAK DETECTION (for HRV)
+// ============================================================
+
+void resetPulseDetector() {
+  dcTracker      = 0.0f;
+  acEnvelope     = 50.0f;
+  prevAC1        = 0.0f;
+  prevAC2        = 0.0f;
+  lastPeakMs     = 0;
+  ibiCount       = 0;
+  detectorStartMs = millis();
+}
+
+void detectPulsePeak(float irFiltered, unsigned long nowMs) {
+  // Fast-lock the baseline for the first second after reset (so a fresh
+  // finger-contact jump doesn't take 4-8+ seconds to settle), then
+  // slow down to preserve the actual heartbeat waveform for detection.
+  bool settling = (nowMs - detectorStartMs) < DC_SETTLE_MS;
+  const float DC_ALPHA = settling ? 0.3f : 0.02f;
+  if (dcTracker == 0.0f) dcTracker = irFiltered;
+  dcTracker += DC_ALPHA * (irFiltered - dcTracker);
+
+  float ac = irFiltered - dcTracker;
+
+  float absAc = fabsf(ac);
+  const float ENV_DECAY = 0.995f;
+  const float MAX_AC_ENVELOPE = 500.0f;  // cap so one motion spike can't blind detection for 60-90+ seconds
+  acEnvelope = (absAc > acEnvelope) ? absAc : (acEnvelope * ENV_DECAY);
+  if (acEnvelope < 10.0f)  acEnvelope = 10.0f;
+  if (acEnvelope > MAX_AC_ENVELOPE) acEnvelope = MAX_AC_ENVELOPE;
+
+  bool isLocalMax = (prevAC1 > prevAC2) && (prevAC1 > ac);
+  bool isBigEnough = prevAC1 > (acEnvelope * PEAK_THRESHOLD_FRAC);
+
+  // ---- TEMP DEBUG: print every ~300ms ----
+  static unsigned long lastDebugMs = 0;
+  if (nowMs - lastDebugMs >= 300) {
+    lastDebugMs = nowMs;
+    Serial.printf("[HRV-DBG] ac=%.1f prevAC1=%.1f env=%.1f thresh=%.1f localMax=%d bigEnough=%d ibiCount=%d\n",
+                  ac, prevAC1, acEnvelope, acEnvelope * PEAK_THRESHOLD_FRAC,
+                  isLocalMax, isBigEnough, ibiCount);
+  }
+  // ---- END TEMP DEBUG ----
+
+  if (isLocalMax && isBigEnough) {
+    if (lastPeakMs > 0) {
+      unsigned long ibi = nowMs - lastPeakMs;
+      Serial.printf("[HRV-DBG] PEAK FOUND: ibi=%lu ms (valid range %d-%d)\n", ibi, MIN_IBI_MS, MAX_IBI_MS);
+      if (ibi >= MIN_IBI_MS && ibi <= MAX_IBI_MS) {
+        if (ibiCount >= IBI_HISTORY_SIZE) {
+          for (int i = 0; i < IBI_HISTORY_SIZE - 1; i++) {
+            ibiHistory[i] = ibiHistory[i + 1];
+          }
+          ibiHistory[IBI_HISTORY_SIZE - 1] = ibi;
+        } else {
+          ibiHistory[ibiCount++] = ibi;
+        }
+      }
+    }
+    lastPeakMs = nowMs;
+  }
+
+  prevAC2 = prevAC1;
+  prevAC1 = ac;
+}
+
+float computeRMSSD() {
+  if (ibiCount < 4) return -1.0f;
+  double sumSq = 0;
+  int n = 0;
+  for (int i = 1; i < ibiCount; i++) {
+    float d = (float)ibiHistory[i] - (float)ibiHistory[i - 1];
+    sumSq += (double)d * d;
+    n++;
+  }
+  return (n > 0) ? sqrtf((float)(sumSq / n)) : -1.0f;
+}
+
 void processBuffer() {
   float pi  = computePerfusionIndex();
 
   if (pi < MIN_PERFUSION_IDX) {
     return;
   }
+
+  lastValidReadingMs = millis();
 
   maxim_heart_rate_and_oxygen_saturation(
     irBuffer, MAX_BUF_LEN, redBuffer,
@@ -551,6 +650,7 @@ void updateMAX30102() {
     if (hasFinger && !fingerPresent) {
       fingerPresent = true;
       bufferIndex = historyCount = historyIndex = 0;
+      resetPulseDetector();
     }
 
     if (!hasFinger && fingerPresent) {
@@ -559,10 +659,19 @@ void updateMAX30102() {
         currentHR      = lastValidHR   = -1;
         currentSpO2    = lastValidSpO2 = -1;
         bufferIndex    = historyCount  = 0;
+        resetPulseDetector();
       }
     }
 
     if (!fingerPresent) continue;
+
+    // If we haven't had a good-quality reading in a while, treat as
+    // stale rather than continuing to show a frozen old value.
+    if (lastValidReadingMs > 0 && now - lastValidReadingMs > READING_STALE_MS) {
+      currentHR   = lastValidHR   = -1;
+      currentSpO2 = lastValidSpO2 = -1;
+      resetPulseDetector();
+    }
 
     // 4-tap moving-average filter
     irTaps [tapIdx] = irRaw;
@@ -571,6 +680,8 @@ void updateMAX30102() {
 
     uint32_t irF  = (irTaps[0]  + irTaps[1]  + irTaps[2]  + irTaps[3])  / 4;
     uint32_t redF = (redTaps[0] + redTaps[1] + redTaps[2] + redTaps[3]) / 4;
+
+    detectPulsePeak((float)irF, now);
 
     irBuffer [bufferIndex] = irF;
     redBuffer[bufferIndex] = redF;
@@ -612,7 +723,7 @@ SensorReading readSensors() {
   r.hr   = (float)currentHR;          // MAX30102 — -1 if no finger
   r.spo2 = (float)currentSpO2;        // MAX30102 — -1 if no finger
   r.gsr  = (float)readGSR();
-  r.hrv  = -1.0f;                     // DB trigger computes SDNN; no sensor-side HRV
+  r.hrv  = (fingerPresent && currentHR > 0) ? computeRMSSD() : -1.0f;  // RMSSD from real beat-to-beat intervals
 
   return r;
 }
@@ -933,7 +1044,7 @@ void connectWebSocket() {
   // the Edge Function runtime directly.
   wsClient.beginSSL(WS_HOST, 443, wsPath.c_str(), nullptr, "");
   wsClient.setReconnectInterval(WS_RECONNECT_INTERVAL_MS);
-  wsClient.enableHeartbeat(15000, 3000, 2);
+  wsClient.enableHeartbeat(25000, 8000, 3);
   wsLastConnectAttempt = millis();
 
   Serial.printf("[WS] Connecting to Supabase Edge Function: %s:443%s\n", WS_HOST, wsPath.c_str());
