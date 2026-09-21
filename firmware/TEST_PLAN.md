@@ -9,8 +9,14 @@ lines.
 Every recorded run must include the identity line printed at boot:
 
 ```
-[BOOT] HAB-001 firmware 0.4.3 mac 24:58:7C:XX:XX:XX
+[BOOT] HAB-001 firmware 0.4.4 mac 24:58:7C:XX:XX:XX
+[BOOT] Reset reason: POWERON
 ```
+
+Reset reason `POWERON`, `USB` or `EXTERNAL_PIN` is expected after a power
+cycle, a flash or the reset button. `PANIC`, anything ending in `_WDT`,
+`BROWNOUT` or `POWER_GLITCH` means the band crashed, hung or lost power:
+record the log and report it, even if the band recovered on its own.
 
 A run without it doesn't count: we can't tell which band or firmware
 produced it. The MAC is burned into the chip, so it identifies the
@@ -22,6 +28,11 @@ The same MAC is printed on every server connect
 
 Check the LED at every step marked **LED:** below. A wrong LED state
 fails the step, even if the log looks right.
+
+At every boot the LED shows red, green, then blue (250 ms each), and the
+log prints `[LED] Self-test on GPIO 38: red, green, blue`. If that
+sequence does not appear, stop: the LED pin or hardware is wrong, and
+none of the LED checks below mean anything until it is fixed.
 
 | Band state | LED |
 |---|---|
@@ -44,8 +55,9 @@ phone hotspot and the office Wi-Fi), plus one wrong password.
 
 ## C1. Switch networks without a power cycle (required)
 
-1. Power-cycle the band and record the full
-   `[BOOT] HAB-XXX firmware x.x.x mac XX:XX:XX:XX:XX:XX` line. The band
+1. Power-cycle the band. **LED:** red, green, blue self-test. Record
+   the full `[BOOT] HAB-XXX firmware x.x.x mac XX:XX:XX:XX:XX:XX` line
+   and the `Reset reason` line. The band
    ID must match the band's label, the version must match
    `FIRMWARE_VERSION` in the source you flashed, and write the MAC down
    next to the band ID. Then provision **A**. Expect `CONNECTING` →

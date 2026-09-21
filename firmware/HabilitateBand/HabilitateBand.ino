@@ -80,7 +80,7 @@
 // CONFIGURATION — edit these
 // ============================================================
 
-#define FIRMWARE_VERSION "0.4.3"
+#define FIRMWARE_VERSION "0.4.4"
 
 // Per-band identity (BAND_ID + DEVICE_TOKEN) comes from secrets.h
 // (gitignored). Every physical band needs its own values; see
@@ -279,13 +279,19 @@ struct SensorReading {
 // LED HELPERS
 // ============================================================
 
-// Pushes to the LED only when the colour changes; updateLED() runs
-// every loop iteration and show() is not free.
+// updateLED() runs every loop iteration and show() is not free, so the
+// LED is written when the colour changes, plus once a second so a
+// single corrupted frame can never leave it stuck wrong or dark.
+#define LED_REFRESH_MS 1000
+
 void ledSetRGB(uint8_t r, uint8_t g, uint8_t b) {
-  static uint32_t shown = 0xFFFFFFFF;  // forces the first write
+  static uint32_t      shown       = 0xFFFFFFFF;  // forces the first write
+  static unsigned long lastWriteMs = 0;
   const uint32_t colour = pixel.Color(r, g, b);
-  if (colour == shown) return;
-  shown = colour;
+  const unsigned long now = millis();
+  if (colour == shown && now - lastWriteMs < LED_REFRESH_MS) return;
+  shown       = colour;
+  lastWriteMs = now;
   pixel.setPixelColor(0, colour);
   pixel.show();
 }
@@ -1108,6 +1114,8 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t /*length*/) {
       hello["band_id"] = BAND_ID;
       hello["fw"] = FIRMWARE_VERSION;
       hello["mac"] = chipMac;
+      hello["reset"] = resetReasonName();
+      hello["uptime_ms"] = millis();
       String helloJson;
       serializeJson(hello, helloJson);
       wsClient.sendTXT(helloJson);
@@ -1538,15 +1546,49 @@ void setupBLE() {
 // SETUP LED
 // ============================================================
 
+// Red, green, blue at boot, before anything else can affect the LED.
+// If this is not visible, the problem is the pin or the hardware, not
+// the state logic: DevKitC-1 v1.1 uses GPIO 38, v1.0 and many clones
+// use GPIO 48, and some clones need their RGB solder jumper closed.
 void setupLED() {
   pixel.begin();
-  pixel.setBrightness(LED_MAX_DUTY);  // reuse existing brightness cap
+  pixel.setBrightness(LED_MAX_DUTY);
+  Serial.printf("[LED] Self-test on GPIO %d: red, green, blue\n", LED_PIN);
+  const uint8_t steps[3][3] = {{255, 0, 0}, {0, 255, 0}, {0, 0, 255}};
+  for (const auto& c : steps) {
+    ledSetRGB(c[0], c[1], c[2]);
+    delay(250);
+  }
   ledOff();
 }
 
 // ============================================================
 // CHIP MAC (see chipMac)
 // ============================================================
+
+// Why the chip last restarted. POWERON / USB are expected after a
+// power cycle or flash; PANIC, *_WDT and BROWNOUT mean a crash, hang or
+// power problem and must be investigated.
+const char* resetReasonName() {
+  switch (esp_reset_reason()) {
+    case ESP_RST_POWERON:    return "POWERON";
+    case ESP_RST_EXT:        return "EXTERNAL_PIN";
+    case ESP_RST_SW:         return "SOFTWARE";
+    case ESP_RST_PANIC:      return "PANIC";
+    case ESP_RST_INT_WDT:    return "INT_WDT";
+    case ESP_RST_TASK_WDT:   return "TASK_WDT";
+    case ESP_RST_WDT:        return "OTHER_WDT";
+    case ESP_RST_DEEPSLEEP:  return "DEEPSLEEP";
+    case ESP_RST_BROWNOUT:   return "BROWNOUT";
+    case ESP_RST_SDIO:       return "SDIO";
+    case ESP_RST_USB:        return "USB";
+    case ESP_RST_JTAG:       return "JTAG";
+    case ESP_RST_EFUSE:      return "EFUSE";
+    case ESP_RST_PWR_GLITCH: return "POWER_GLITCH";
+    case ESP_RST_CPU_LOCKUP: return "CPU_LOCKUP";
+    default:                 return "UNKNOWN";
+  }
+}
 
 void readChipMac() {
   uint8_t mac[6];
@@ -1608,6 +1650,7 @@ void setup() {
   }
 
   Serial.printf("[BOOT] %s firmware %s mac %s\n", BAND_ID, FIRMWARE_VERSION, chipMac);
+  Serial.printf("[BOOT] Reset reason: %s\n", resetReasonName());
   Serial.printf("[BOOT] Sensors MPU=%s STTS22H=%s MAX30102=%s\n",
                 mpuFound ? "OK" : "MISSING",
                 sttsFound ? "OK" : "MISSING",
