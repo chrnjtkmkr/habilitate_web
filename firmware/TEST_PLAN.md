@@ -3,7 +3,17 @@
 Run with the band on USB and the Arduino serial monitor open at 115200
 baud. The serial log is the evidence: every status change prints
 `[WIFI] Status -> <STATUS>`, and every failed join prints its reason
-code. Record the log for each test.
+code. Record the full log for each test, starting from the `[BOOT]`
+lines.
+
+Every recorded run must include the identity line printed at boot:
+
+```
+[BOOT] HAB-001 firmware 0.4.1
+```
+
+A run without it doesn't count: we can't tell which band or firmware
+produced it.
 
 Setup: flash from this repo (see PROVISIONING.md), open the dashboard in
 Chrome, and connect to the band from Session → Therapy band.
@@ -13,8 +23,11 @@ phone hotspot and the office Wi-Fi), plus one wrong password.
 
 ## C1. Switch networks without a power cycle (required)
 
-1. Provision **A**. Expect `CONNECTING` → `CLOUD_CONNECTING` →
-   `CONNECTED`, and the dashboard shows Connected.
+1. Power-cycle the band and record the `[BOOT] HAB-XXX firmware x.x.x`
+   line. The band ID must match the band's label, and the version must
+   match `FIRMWARE_VERSION` in the source you flashed. Then provision
+   **A**. Expect `CONNECTING` → `CLOUD_CONNECTING` → `CONNECTED`, and
+   the dashboard shows Connected.
 2. Confirm data is flowing: `[WS] Sent seq ...` lines appear, and new
    `device_telemetry` rows arrive for this band.
 3. Without unplugging the band, click **Change Wi-Fi network**, scan,
@@ -57,6 +70,18 @@ in the middle of a join attempt (right after a `CONNECTING`).
 
 In each case the dashboard shows the matching message, and the band
 keeps retrying (visible in the log).
+
+**Enterprise (802.1X) Wi-Fi is out of scope.** These are networks that
+ask for a username as well as a password, common in offices. The band
+cannot join them, because there is no way to give it a username or
+certificates. Test that it fails clearly:
+
+| Scenario | Expected |
+|---|---|
+| Scan near an 802.1X network | Listed but greyed out, marked "Not supported: this network needs a username sign-in", and cannot be selected |
+
+If the office network is 802.1X, the band needs a separate network there:
+a PSK guest/IoT SSID, or a phone hotspot.
 
 ## C5. Scan while retrying
 

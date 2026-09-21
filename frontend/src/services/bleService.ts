@@ -117,6 +117,8 @@ export interface WiFiNetwork {
   ssid: string;
   rssi: number;
   secure: boolean;
+  // 802.1X network; the band cannot join these (firmware 0.4.1+).
+  enterprise: boolean;
   channel?: number;
 }
 
@@ -511,6 +513,7 @@ export async function scanWiFiNetworks(
             ssid: String(data.ssid ?? ''),
             rssi: Number(data.rssi ?? -100),
             secure: Boolean(data.secure),
+            enterprise: Boolean(data.enterprise),
             channel:
               data.channel !== undefined
                 ? Number(data.channel)

@@ -879,5 +879,6 @@
   "band_wifi_state_timeout": "Still connecting",
   "band_wifi_state_timeout_detail": "The band is taking longer than usual. It keeps trying in the background, so check again in a minute.",
   "band_wifi_state_unknown": "Checking",
-  "band_wifi_state_unknown_detail": "Checking the band's Wi-Fi status..."
+  "band_wifi_state_unknown_detail": "Checking the band's Wi-Fi status...",
+  "band_wifi_enterprise_unsupported": "Not supported: this network needs a username sign-in (enterprise Wi-Fi)"
 }

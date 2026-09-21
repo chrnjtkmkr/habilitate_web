@@ -559,6 +559,7 @@ const {
                             <button
                               key={`${network.ssid}-${network.channel ?? 'na'}`}
                               type="button"
+                              disabled={network.enterprise}
                               onClick={() => {
                                 setSelectedSSID(
                                   network.ssid,
@@ -569,9 +570,11 @@ const {
                                 );
                               }}
                               className={`w-full rounded-xl border p-3 text-left transition ${
-                                selected
-                                  ? 'border-ink-primary bg-background'
-                                  : 'border-border bg-background hover:border-ink-secondary'
+                                network.enterprise
+                                  ? 'cursor-not-allowed border-border bg-background opacity-60'
+                                  : selected
+                                    ? 'border-ink-primary bg-background'
+                                    : 'border-border bg-background hover:border-ink-secondary'
                               }`}
                             >
                               <div className="flex items-center justify-between gap-3">
@@ -581,12 +584,9 @@ const {
                                   </p>
 
                                   <p className="mt-1 text-xs text-ink-secondary">
-                                    {getSignalLabel(
-                                      network.rssi,
-                                    )}{' '}
-                                    ·{' '}
-                                    {network.rssi}{' '}
-                                    dBm
+                                    {network.enterprise
+                                      ? t('band_wifi_enterprise_unsupported')
+                                      : `${getSignalLabel(network.rssi)} · ${network.rssi} dBm`}
                                   </p>
                                 </div>
 

@@ -79,7 +79,7 @@
 // CONFIGURATION — edit these
 // ============================================================
 
-#define FIRMWARE_VERSION "0.4.0"
+#define FIRMWARE_VERSION "0.4.1"
 
 // Per-band identity (BAND_ID + DEVICE_TOKEN) comes from secrets.h
 // (gitignored). Every physical band needs its own values; see
@@ -913,14 +913,31 @@ void sendScanResult(const String& json) {
 // SEND WIFI SCAN RESULTS (n = completed async scan count)
 // ============================================================
 
+// 802.1X networks need a username (and often certificates), which the
+// band cannot be given, so the dashboard marks them as unsupported.
+bool isEnterpriseAuth(wifi_auth_mode_t mode) {
+  switch (mode) {
+    case WIFI_AUTH_WPA_ENTERPRISE:
+    case WIFI_AUTH_WPA2_ENTERPRISE:
+    case WIFI_AUTH_WPA3_ENTERPRISE:
+    case WIFI_AUTH_WPA2_WPA3_ENTERPRISE:
+    case WIFI_AUTH_WPA3_ENT_192:
+      return true;
+    default:
+      return false;
+  }
+}
+
 void sendScanResults(int n) {
   for (int i = 0; i < n; i++) {
+    const wifi_auth_mode_t auth = WiFi.encryptionType(i);
     StaticJsonDocument<256> doc;
     doc["type"]    = "network";
     doc["ssid"]    = WiFi.SSID(i);
     doc["rssi"]    = WiFi.RSSI(i);
-    doc["secure"]  = (WiFi.encryptionType(i) != WIFI_AUTH_OPEN);
+    doc["secure"]  = (auth != WIFI_AUTH_OPEN);
     doc["channel"] = WiFi.channel(i);
+    if (isEnterpriseAuth(auth)) doc["enterprise"] = true;
     String json;
     serializeJson(doc, json);
     sendScanResult(json);
