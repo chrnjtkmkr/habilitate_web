@@ -53,5 +53,19 @@ Arduino IDE settings (Tools menu):
 
 Always flash from this repository's `firmware/HabilitateBand` folder.
 
-On boot the serial monitor prints `[BOOT] HAB-002 firmware <version>`.
-Check that it matches before handing the band over.
+On boot the serial monitor prints
+`[BOOT] HAB-002 firmware <version> mac XX:XX:XX:XX:XX:XX`. Check that the
+band ID and version match before handing the band over.
+
+## 4. Record the chip MAC
+
+`BAND_ID` is typed by hand; the MAC is burned into the chip. Storing it
+next to the registration means a band flashed with the wrong
+`secrets.h` shows up as a MAC mismatch instead of silently sharing
+another band's identity.
+
+```sql
+update public.sensor_devices
+set metadata = metadata || jsonb_build_object('chip_mac', 'XX:XX:XX:XX:XX:XX')
+where device_uid = 'HAB-002';
+```

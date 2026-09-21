@@ -9,11 +9,31 @@ lines.
 Every recorded run must include the identity line printed at boot:
 
 ```
-[BOOT] HAB-001 firmware 0.4.1
+[BOOT] HAB-001 firmware 0.4.2 mac 24:58:7C:XX:XX:XX
 ```
 
 A run without it doesn't count: we can't tell which band or firmware
-produced it.
+produced it. The MAC is burned into the chip, so it identifies the
+physical band even if two bands were flashed with the same `BAND_ID`.
+The same MAC is printed on every server connect
+(`[WS] Connected to Supabase Edge Function as HAB-001 (mac ...)`).
+
+## LED reference
+
+Check the LED at every step marked **LED:** below. A wrong LED state
+fails the step, even if the log looks right.
+
+| Band state | LED |
+|---|---|
+| No Wi-Fi credentials stored | Off |
+| Waiting for Wi-Fi: joining, retrying, or joined but the server is not reachable yet | Orange blinking (1 Hz) |
+| Wi-Fi connected and streaming (`CONNECTED`) | Orange solid |
+| Session active (dashboard sent ACTIVE or RESUME) | Purple solid |
+| Session paused | Purple blinking (1 Hz) |
+
+Session colours take priority over Wi-Fi colours. So during an active
+session the LED does not show a Wi-Fi loss; C3 step 3 records how that
+case shows up on the dashboard.
 
 Setup: flash from this repo (see PROVISIONING.md), open the dashboard in
 Chrome, and connect to the band from Session → Therapy band.
@@ -23,21 +43,26 @@ phone hotspot and the office Wi-Fi), plus one wrong password.
 
 ## C1. Switch networks without a power cycle (required)
 
-1. Power-cycle the band and record the `[BOOT] HAB-XXX firmware x.x.x`
-   line. The band ID must match the band's label, and the version must
-   match `FIRMWARE_VERSION` in the source you flashed. Then provision
-   **A**. Expect `CONNECTING` → `CLOUD_CONNECTING` → `CONNECTED`, and
-   the dashboard shows Connected.
+1. Power-cycle the band and record the full
+   `[BOOT] HAB-XXX firmware x.x.x mac XX:XX:XX:XX:XX:XX` line. The band
+   ID must match the band's label, the version must match
+   `FIRMWARE_VERSION` in the source you flashed, and write the MAC down
+   next to the band ID. Then provision **A**. Expect `CONNECTING` →
+   `CLOUD_CONNECTING` → `CONNECTED`, and the dashboard shows Connected.
+   **LED:** orange blinking while connecting, orange solid at `CONNECTED`.
 2. Confirm data is flowing: `[WS] Sent seq ...` lines appear, and new
    `device_telemetry` rows arrive for this band.
-3. Without unplugging the band, click **Change Wi-Fi network**, scan,
+3. Start a session from the dashboard. **LED:** purple solid. Pause it:
+   purple blinking. Resume: purple solid. End it: back to orange solid.
+4. Without unplugging the band, click **Change Wi-Fi network**, scan,
    pick **B**, enter its password and connect.
-4. Expect in the log, in order:
+5. Expect in the log, in order:
    `New credentials for "B" saved` → `Status -> CONNECTING` →
    `Joined "B" ...` → `Status -> CLOUD_CONNECTING` → `Status -> CONNECTED`.
    There must be no `Joined "A"`, and no failure status in between.
-5. Power-cycle the band. It must come back on **B**
-   (`Stored credentials for "B"`), not A.
+   **LED:** orange blinking during the switch, orange solid on B.
+6. Power-cycle the band. It must come back on **B**
+   (`Stored credentials for "B"`), not A, with the same MAC as step 1.
 
 Pass: the band streams on B within about 30 s of step 3, and reconnects
 to B after the reboot.
@@ -46,6 +71,7 @@ to B after the reboot.
 
 1. Provision **A** with a wrong password. Expect `FAILED_AUTH`, then
    retries every 2, 4, 8 ... up to 30 s (`retry in ... ms`).
+   **LED:** orange blinking throughout (never solid).
 2. While it is retrying, provision **B** correctly.
 3. Expect an immediate `CONNECTING` for B and then `CONNECTED`. No
    further retries against A may appear in the log.
@@ -57,8 +83,12 @@ in the middle of a join attempt (right after a `CONNECTING`).
 
 1. Online on a phone hotspot, turn the hotspot off.
    Expect `Link to ... lost` → `CONNECTING` → `NO_NETWORK` with retries.
+   **LED:** orange solid → orange blinking within a few seconds.
 2. After 2+ minutes, turn it back on. Expect `CONNECTED` within about
-   30 s, with no power cycle.
+   30 s, with no power cycle. **LED:** back to orange solid.
+3. Repeat step 1 during an active session. **LED:** stays purple solid
+   (session colour wins; see the note in the LED reference). Record how
+   the loss shows up on the dashboard.
 
 ## C4. Failure reporting
 
@@ -66,7 +96,7 @@ in the middle of a join attempt (right after a `CONNECTING`).
 |---|---|
 | Wrong password | `FAILED_AUTH` |
 | SSID out of range, or a 5 GHz-only network | `NO_NETWORK` |
-| Hotspot with mobile data off (Wi-Fi joins, no internet) | `CLOUD_CONNECTING`, then `NO_INTERNET` after 20 s |
+| Hotspot with mobile data off (Wi-Fi joins, no internet) | `CLOUD_CONNECTING`, then `NO_INTERNET` after 20 s; **LED:** orange blinking, never solid |
 
 In each case the dashboard shows the matching message, and the band
 keeps retrying (visible in the log).
@@ -94,6 +124,8 @@ retries resume afterwards.
 Leave the band streaming for 1 hour during a mock session. Note every
 `[WS] Disconnected` and how long each takes to return to `CONNECTED`,
 and confirm there are no reboots (`[BOOT]` must appear only once).
+**LED:** purple solid for the whole hour. A server reconnect must not
+change it; before 0.4.0 every WebSocket drop reset the session LED.
 Expect periodic WebSocket drops caused by the Supabase Edge Function
 time limit; these are addressed by the transport work, not by this
 change.

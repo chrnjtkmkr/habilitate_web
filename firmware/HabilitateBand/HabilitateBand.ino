@@ -64,6 +64,7 @@
 #include <Preferences.h>
 #include <WebSocketsClient.h>
 #include <Adafruit_NeoPixel.h>
+#include <esp_mac.h>
 
 // Disable unused features to save flash space
 #define ARDUINOJSON_USE_LONG_LONG 0
@@ -79,7 +80,7 @@
 // CONFIGURATION — edit these
 // ============================================================
 
-#define FIRMWARE_VERSION "0.4.1"
+#define FIRMWARE_VERSION "0.4.2"
 
 // Per-band identity (BAND_ID + DEVICE_TOKEN) comes from secrets.h
 // (gitignored). Every physical band needs its own values; see
@@ -98,6 +99,12 @@
 
 // The dashboard finds the band by this advertised name.
 #define DEVICE_NAME  "Habilitate-" BAND_ID
+
+// Factory base MAC from eFuse, unique per chip. BAND_ID is set by hand,
+// so this is logged at boot and sent on every server connect: two bands
+// flashed with the same BAND_ID show up as one ID with two MACs.
+// Filled in by readChipMac() in setup().
+char chipMac[18] = "00:00:00:00:00:00";
 
 // Supabase WebSocket endpoint
 #define WS_HOST  "sqjuracvmmuyrdcapehk.functions.supabase.co"
@@ -143,28 +150,26 @@
 #define GSR_PIN  1
 
 // ============================================================
-// LED (single onboard WS2812)
+// LED (single onboard WS2812, driven by Adafruit_NeoPixel)
 // ============================================================
-// Blue  → connectivity state
-// Green → therapy session state
+// Orange (#FF5A00) → connectivity state
+// Purple (#7B2FFF) → therapy session state
 //
-// Brightness is capped at LED_MAX_DUTY (0–255) to save battery
-// while keeping the LED clearly visible.
+// Colours are full scale; pixel.setBrightness(LED_MAX_DUTY) caps
+// the output to save battery while keeping the LED visible.
 // ============================================================
-#define LED_PIN         38    // onboard WS2812 (try 48 if 38 doesn't light up)
+#define LED_PIN         38    // onboard WS2812 on DevKitC-1 v1.1 (v1.0 boards use 48)
 #define LED_COUNT       1
 
 #define LED_MAX_DUTY      48      // 0-255; ~19% duty: visible while still battery-conscious
 
-// Blue → connectivity indication
-#define BLUE_R  0
-#define BLUE_G  0
-#define BLUE_B  LED_MAX_DUTY
+#define ORANGE_R  255
+#define ORANGE_G   90
+#define ORANGE_B    0
 
-// Green → Session indication
-#define GREEN_R  0
-#define GREEN_G  LED_MAX_DUTY
-#define GREEN_B  0
+#define PURPLE_R  123
+#define PURPLE_G   47
+#define PURPLE_B  255
 
 // ============================================================
 // BLE UUIDs — must match frontend bleService.ts exactly
@@ -274,8 +279,14 @@ struct SensorReading {
 // LED HELPERS
 // ============================================================
 
+// Pushes to the LED only when the colour changes; updateLED() runs
+// every loop iteration and show() is not free.
 void ledSetRGB(uint8_t r, uint8_t g, uint8_t b) {
-  pixel.setPixelColor(0, pixel.Color(r, g, b));
+  static uint32_t shown = 0xFFFFFFFF;  // forces the first write
+  const uint32_t colour = pixel.Color(r, g, b);
+  if (colour == shown) return;
+  shown = colour;
+  pixel.setPixelColor(0, colour);
   pixel.show();
 }
 
@@ -290,11 +301,17 @@ void ledOff() {
 // session state without using delay().
 //
 // Priority (highest first):
-//   Green constant  → session active
-//   Green blinking  → session paused
-//   Blue constant   → streaming to the server, no active session
-//   Blue blinking   → connecting / retrying
-//   Off             → no Wi-Fi credentials stored
+//   Purple solid     → session active (also after RESUME)
+//   Purple blinking  → session paused
+//   Orange solid     → Wi-Fi connected: joined and streaming to the
+//                      server (NetState::Online)
+//   Orange blinking  → waiting for Wi-Fi: joining, retrying, or joined
+//                      but the server is not reachable yet
+//   Off              → no Wi-Fi credentials stored
+//
+// Orange is solid only once data can actually flow. On a network that
+// joins but blocks the server (captive portal, firewall) it keeps
+// blinking, so a band that is not recording never looks ready.
 // ============================================================
 
 void updateLED() {
@@ -310,23 +327,23 @@ void updateLED() {
   }
 
   if (sessionActive && !sessionPaused) {
-    ledSetRGB(GREEN_R, GREEN_G, GREEN_B);
+    ledSetRGB(PURPLE_R, PURPLE_G, PURPLE_B);
     return;
   }
 
   if (sessionPaused) {
-    if (blinkOn) ledSetRGB(GREEN_R, GREEN_G, GREEN_B);
+    if (blinkOn) ledSetRGB(PURPLE_R, PURPLE_G, PURPLE_B);
     else         ledOff();
     return;
   }
 
   if (netState == NetState::Online) {
-    ledSetRGB(BLUE_R, BLUE_G, BLUE_B);
+    ledSetRGB(ORANGE_R, ORANGE_G, ORANGE_B);
     return;
   }
 
   if (netState != NetState::NoCredentials) {
-    if (blinkOn) ledSetRGB(BLUE_R, BLUE_G, BLUE_B);
+    if (blinkOn) ledSetRGB(ORANGE_R, ORANGE_G, ORANGE_B);
     else         ledOff();
     return;
   }
@@ -1008,8 +1025,8 @@ class WifiScanRequestCallback : public BLECharacteristicCallbacks {
 // SESSION STATE CONTROL
 // ============================================================
 // BLE command values:
-//   ACTIVE / RESUME  -> green constant
-//   PAUSED / PAUSE   -> green blinking
+//   ACTIVE / RESUME  -> purple solid
+//   PAUSED / PAUSE   -> purple blinking
 //   STOPPED          -> return to connectivity indication
 //
 // Session state is controlled explicitly by the dashboard over BLE.
@@ -1074,12 +1091,14 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t /*length*/) {
 
     case WStype_CONNECTED: {
       wsConnected = true;
-      Serial.printf("[WS] Connected to Supabase Edge Function\n");
+      Serial.printf("[WS] Connected to Supabase Edge Function as %s (mac %s)\n",
+                    BAND_ID, chipMac);
 
       StaticJsonDocument<128> hello;
       hello["type"] = "device_hello";
       hello["band_id"] = BAND_ID;
       hello["fw"] = FIRMWARE_VERSION;
+      hello["mac"] = chipMac;
       String helloJson;
       serializeJson(hello, helloJson);
       wsClient.sendTXT(helloJson);
@@ -1517,6 +1536,17 @@ void setupLED() {
 }
 
 // ============================================================
+// CHIP MAC (see chipMac)
+// ============================================================
+
+void readChipMac() {
+  uint8_t mac[6];
+  if (esp_efuse_mac_get_default(mac) != ESP_OK) return;
+  snprintf(chipMac, sizeof(chipMac), "%02X:%02X:%02X:%02X:%02X:%02X",
+           mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+}
+
+// ============================================================
 // SETUP
 // ============================================================
 
@@ -1524,6 +1554,7 @@ void setup() {
   Serial.begin(115200);
   delay(500);
   Serial.println("[BOOT] HabilitateBand starting");
+  readChipMac();
 
   // LED — initialise first so the user gets visual feedback immediately
   setupLED();
@@ -1567,7 +1598,7 @@ void setup() {
     setWifiStatus("NO_CREDENTIALS");
   }
 
-  Serial.printf("[BOOT] %s firmware %s\n", BAND_ID, FIRMWARE_VERSION);
+  Serial.printf("[BOOT] %s firmware %s mac %s\n", BAND_ID, FIRMWARE_VERSION, chipMac);
   Serial.printf("[BOOT] Sensors MPU=%s STTS22H=%s MAX30102=%s\n",
                 mpuFound ? "OK" : "MISSING",
                 sttsFound ? "OK" : "MISSING",
