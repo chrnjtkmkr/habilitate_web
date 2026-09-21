@@ -1,13 +1,25 @@
 import { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import Button from '../Button';
 import Modal from '../Modal';
 import Pill from '../Pill';
 
 import { useWearable } from '../../hooks/useWearable';
+import {
+  describeWifiStatus,
+  isValidWifiPassword,
+} from '../../services/wifiStatus';
 
 export default function DeviceSetupCard() {
+  const { t } = useTranslation();
+
   const [open, setOpen] =
+    useState(false);
+
+  // Shows the Wi-Fi setup form while the band is already online, so
+  // it can be moved to another network without a power cycle.
+  const [changingWifi, setChangingWifi] =
     useState(false);
 
   const [selectedSSID, setSelectedSSID] =
@@ -65,15 +77,27 @@ const {
   // ==========================================================
 
   async function handleConfigureWiFi() {
-    if (!selectedSSID) {
+    if (
+      !selectedSSID ||
+      !isValidWifiPassword(password)
+    ) {
       return;
     }
 
     try {
-      await configureWiFi(
+      const result = await configureWiFi(
         selectedSSID,
         password,
       );
+
+      if (
+        describeWifiStatus(result).outcome ===
+        'connected'
+      ) {
+        setChangingWifi(false);
+        setSelectedSSID('');
+        setPassword('');
+      }
     } catch {
       // Error is already stored in useWearable.
     }
@@ -125,6 +149,12 @@ const {
   const deviceReady =
     isConnected &&
     wifiReady;
+
+  const wifiInfo =
+    describeWifiStatus(wifiStatus);
+
+  const passwordValid =
+    isValidWifiPassword(password);
 
   return (
     <>
@@ -206,10 +236,7 @@ const {
                       : 'font-medium text-ink-secondary'
                   }
                 >
-                  {wifiReady
-                    ? 'Connected'
-                    : wifiStatus ||
-                      'Checking...'}
+                  {t(wifiInfo.labelKey)}
                 </p>
               </div>
             </div>
@@ -430,37 +457,37 @@ const {
               <div className="flex items-center justify-between">
                 <div>
                   <p className="text-sm font-medium text-ink-primary">
-                    Wi-Fi status
+                    {t('band_wifi_status_title')}
                   </p>
 
                   <p className="mt-1 text-xs text-ink-secondary">
-                    {wifiReady
-                      ? 'The therapy band is connected to the configured Wi-Fi network.'
-                      : wifiStatus ===
-                          'CONNECTING'
-                        ? 'The therapy band is connecting to Wi-Fi...'
-                        : 'Wi-Fi setup may be required.'}
+                    {t(wifiInfo.detailKey)}
                   </p>
                 </div>
 
-                <Pill
-                  variant={
-                    wifiReady
-                      ? 'success'
-                      : wifiStatus ===
-                          'CONNECTING'
-                        ? 'warning'
-                        : wifiStatus ===
-                              'FAILED'
-                          ? 'danger'
-                          : 'neutral'
-                  }
-                >
-                  {wifiReady
-                    ? 'Connected'
-                    : wifiStatus}
+                <Pill variant={wifiInfo.tone}>
+                  {t(wifiInfo.labelKey)}
                 </Pill>
               </div>
+
+              {wifiReady && (
+                <div className="mt-3 flex justify-end">
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      setChangingWifi(
+                        (current) => !current,
+                      )
+                    }
+                    disabled={wifiProvisioning}
+                  >
+                    {changingWifi
+                      ? t('band_wifi_keep_current')
+                      : t('band_wifi_change')}
+                  </Button>
+                </div>
+              )}
             </div>
           )}
 
@@ -469,17 +496,15 @@ const {
               ================================================= */}
 
           {isConnected &&
-            !wifiReady && (
+            (!wifiReady || changingWifi) && (
               <div className="space-y-4 rounded-xl border border-border bg-background p-4">
                 <div>
                   <h4 className="font-medium text-ink-primary">
-                    Wi-Fi setup
+                    {t('band_wifi_setup_title')}
                   </h4>
 
                   <p className="mt-1 text-sm leading-5 text-ink-secondary">
-                    Scan nearby networks and select the
-                    Wi-Fi network used by this therapy
-                    center.
+                    {t('band_wifi_setup_hint')}
                   </p>
                 </div>
 
@@ -498,11 +523,11 @@ const {
                     }
                   >
                     {wifiScanning
-                      ? 'Scanning...'
+                      ? t('band_wifi_scanning')
                       : wifiNetworks.length >
                           0
-                        ? 'Refresh'
-                        : 'Scan nearby networks'}
+                        ? t('band_wifi_refresh')
+                        : t('band_wifi_scan')}
                   </Button>
                 </div>
 
@@ -520,7 +545,7 @@ const {
                   0 && (
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-ink-secondary">
-                      Nearby networks
+                      {t('band_wifi_nearby')}
                     </p>
 
                     <div className="max-h-56 space-y-2 overflow-y-auto">
@@ -569,7 +594,7 @@ const {
                                   {network.secure && (
                                     <span
                                       className="text-xs text-ink-secondary"
-                                      aria-label="Secured network"
+                                      aria-label={t('band_wifi_secured')}
                                     >
                                       🔒
                                     </span>
@@ -599,7 +624,7 @@ const {
                         htmlFor="selected-wifi"
                         className="text-xs font-medium text-ink-secondary"
                       >
-                        Selected network
+                        {t('band_wifi_selected')}
                       </label>
 
                       <div
@@ -617,7 +642,7 @@ const {
                         htmlFor="wifi-password"
                         className="text-xs font-medium text-ink-secondary"
                       >
-                        Wi-Fi password
+                        {t('band_wifi_password')}
                       </label>
 
                       <input
@@ -630,9 +655,16 @@ const {
                               .value,
                           )
                         }
-                        placeholder="Enter Wi-Fi password"
+                        placeholder={t('band_wifi_password_placeholder')}
+                        aria-invalid={!passwordValid}
                         className="mt-1 w-full rounded-lg border border-border bg-surface px-3 py-2 text-sm text-ink-primary outline-none placeholder:text-ink-secondary focus:border-ink-primary"
                       />
+
+                      {!passwordValid && (
+                        <p className="mt-1 text-xs text-danger">
+                          {t('band_wifi_password_invalid')}
+                        </p>
+                      )}
                     </div>
 
                     {/* CONNECT WIFI */}
@@ -644,12 +676,13 @@ const {
                       }
                       disabled={
                         wifiProvisioning ||
-                        !selectedSSID
+                        !selectedSSID ||
+                        !passwordValid
                       }
                     >
                       {wifiProvisioning
-                        ? 'Connecting ESP32 to Wi-Fi...'
-                        : 'Connect ESP32 to Wi-Fi'}
+                        ? t('band_wifi_connecting')
+                        : t('band_wifi_connect')}
                     </Button>
                   </div>
                 )}

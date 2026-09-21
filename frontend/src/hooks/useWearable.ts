@@ -14,6 +14,18 @@ import {
   type HabilitateBluetoothDevice,
   type WiFiNetwork,
 } from '../services/bleService';
+import {
+  describeWifiStatus,
+  WIFI_STATUS_TIMEOUT,
+} from '../services/wifiStatus';
+
+// How long configureWiFi() waits for a final status. A join takes up
+// to 20 s on the band and the first server handshake several more.
+const PROVISION_WAIT_MS = 45_000;
+const PROVISION_POLL_MS = 1_000;
+
+const sleep = (ms: number) =>
+  new Promise<void>((resolve) => setTimeout(resolve, ms));
 
 export type WearableStatus =
   | 'disconnected'
@@ -350,88 +362,38 @@ export function useWearable() {
             password,
           );
 
-          // The ESP32 needs some time to process the
-          // credentials and begin connecting.
-          await new Promise<void>(
-            (resolve) =>
-              setTimeout(
-                resolve,
-                1000,
-              ),
-          );
+          // The band restarts its connection as soon as it
+          // receives the write, so the first read already
+          // reflects the new network, never the old one.
+          await sleep(PROVISION_POLL_MS);
 
-          // Poll instead of doing only one status read.
-          //
-          // ESP32 may still be connecting when the first
-          // status request arrives.
-          const maxAttempts = 15;
+          // Wait for a final status. Failure details are
+          // shown from wifiStatus by the UI; wifiError is
+          // reserved for Bluetooth/transport errors.
+          const deadline =
+            Date.now() + PROVISION_WAIT_MS;
 
           let finalStatus =
-            'CONNECTING';
+            await readWiFiStatus(device);
+          setWifiStatus(finalStatus);
 
-          for (
-            let attempt = 0;
-            attempt < maxAttempts;
-            attempt++
+          while (
+            describeWifiStatus(finalStatus)
+              .outcome === 'pending' &&
+            Date.now() < deadline
           ) {
+            await sleep(PROVISION_POLL_MS);
             finalStatus =
-              await readWiFiStatus(
-                device,
-              );
-
-            setWifiStatus(
-              finalStatus,
-            );
-
-            if (
-              finalStatus ===
-                'CONNECTED' ||
-              finalStatus ===
-                'FAILED' ||
-              finalStatus ===
-                'INVALID' ||
-              finalStatus ===
-                'NO_CREDENTIALS'
-            ) {
-              break;
-            }
-
-            await new Promise<void>(
-              (resolve) =>
-                setTimeout(
-                  resolve,
-                  1000,
-                ),
-            );
-          }
-
-          // If it never reached a final state,
-          // report timeout.
-          if (
-            finalStatus ===
-              'CONNECTING'
-          ) {
-            finalStatus =
-              'TIMEOUT';
-
-            setWifiStatus(
-              finalStatus,
-            );
+              await readWiFiStatus(device);
+            setWifiStatus(finalStatus);
           }
 
           if (
-            finalStatus !==
-            'CONNECTED'
+            describeWifiStatus(finalStatus)
+              .outcome === 'pending'
           ) {
-            const message =
-              finalStatus ===
-              'TIMEOUT'
-                ? 'Wi-Fi connection timed out. Please try again.'
-                : `Wi-Fi connection failed: ${finalStatus}`;
-
-            setWifiError(
-              message,
-            );
+            finalStatus = WIFI_STATUS_TIMEOUT;
+            setWifiStatus(finalStatus);
           }
 
           return finalStatus;

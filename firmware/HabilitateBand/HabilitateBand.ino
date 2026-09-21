@@ -10,11 +10,35 @@
 // BLE CHARACTERISTICS:
 //   0x0002  Band ID          (read)
 //   0x0003  Sensor Data      (notify)  [legacy / reserved]
-//   0x0004  WiFi Config      (write)   {ssid, password}
-//   0x0005  WiFi Status      (read)    CONNECTED|CONNECTING|FAILED|...
+//   0x0004  WiFi Config      (write)   {"ssid","password"} or {"forget":true}
+//   0x0005  WiFi Status      (read + notify)  see WIFI STATUS VALUES below
 //   0x0006  WiFi Scan Req    (write)   "SCAN"
 //   0x0007  WiFi Scan Result (notify)  JSON network / end / error
 //   0x0008  Session State    (write)   ACTIVE|PAUSE|RESUME|STOPPED
+//
+// CONNECTIVITY MODEL
+//   One set of Wi-Fi credentials is stored in NVS (namespace "wifi").
+//   Every write to 0x0004 replaces it completely and restarts the
+//   connection from scratch, whatever state the previous network left
+//   behind. The band never gives up: failed attempts back off (2 s up
+//   to 30 s) and retry until new credentials arrive or a forget.
+//   Joining Wi-Fi and authenticating with the server are separate
+//   stages, and a slow server never tears down a working Wi-Fi link.
+//
+// WIFI STATUS VALUES (0x0005)
+//   NO_CREDENTIALS       nothing stored
+//   CONNECTING           joining the Wi-Fi network
+//   CLOUD_CONNECTING     joined Wi-Fi; authenticating with the server
+//   CONNECTED            streaming to the server
+//   NO_INTERNET          joined Wi-Fi but the server is unreachable
+//                        (captive portal / firewall); still retrying
+//   FAILED_AUTH          network rejected the password; still retrying
+//   NO_NETWORK           SSID not found (out of range or 5 GHz-only);
+//                        still retrying
+//   FAILED               other join failure; still retrying
+//   INVALID_CREDENTIALS  malformed BLE write ignored (only reported when
+//                        no credentials are stored; otherwise the
+//                        current network is kept and the write logged)
 //
 // BOARD: ESP32S3 Dev Module (select in Arduino IDE)
 //   Tools → USB CDC On Boot: Enabled  (for Serial over USB)
@@ -28,21 +52,6 @@
 //   - SparkFun STTS22H     (by SparkFun Electronics)
 //   - SparkFun MAX3010x    (by SparkFun Electronics)
 //   - Wire                 (built-in)
-//
-// CHANGE LOG (this revision)
-//   - Resolved a merge conflict between two prior edits of the
-//     WS_HOST / connectWebSocket() comment blocks. Both sides said
-//     the same thing; one had literal "\n" typed into a string
-//     instead of real line breaks. No behavior change from this part.
-//   - FIXED: WiFi-drop detection. Previously, once wifiStatus reached
-//     "CONNECTED" nothing in loop() ever re-checked whether the radio
-//     was still actually connected. If WiFi dropped, wifiStatus (and
-//     therefore what the dashboard sees over BLE) stayed stuck on
-//     "CONNECTED" forever, and the WebSocket state (wsConnected /
-//     wsAuthenticated) was never cleared either — so the dashboard
-//     could show "connected" indefinitely after the band lost WiFi.
-//     See the WiFi connection monitor block in loop() below for the
-//     new else-if branch that handles this.
 // ============================================================
 
 #include <Arduino.h>
@@ -70,16 +79,25 @@
 // CONFIGURATION — edit these
 // ============================================================
 
-#define BAND_ID      "HAB-001"
-#define DEVICE_NAME  "Habilitate-HAB-001"
+#define FIRMWARE_VERSION "0.4.0"
 
-// Device token — loaded from secrets.h (gitignored).
-// Copy secrets.example.h → secrets.h and set the real value.
+// Per-band identity (BAND_ID + DEVICE_TOKEN) comes from secrets.h
+// (gitignored). Every physical band needs its own values; see
+// secrets.example.h and firmware/PROVISIONING.md.
 #include "secrets.h"
 
+#ifndef BAND_ID
+  #error "Define BAND_ID in secrets.h (see secrets.example.h)"
+#endif
+#ifndef DEVICE_TOKEN
+  #error "Define DEVICE_TOKEN in secrets.h (see secrets.example.h)"
+#endif
 #ifdef DEVICE_TOKEN_IS_PLACEHOLDER
   #error "Set a real DEVICE_TOKEN in secrets.h and delete DEVICE_TOKEN_IS_PLACEHOLDER"
 #endif
+
+// The dashboard finds the band by this advertised name.
+#define DEVICE_NAME  "Habilitate-" BAND_ID
 
 // Supabase WebSocket endpoint
 #define WS_HOST  "sqjuracvmmuyrdcapehk.functions.supabase.co"
@@ -90,8 +108,21 @@
 // Sensor streaming rate
 #define SENSOR_INTERVAL_MS       40    // 25 Hz
 
-// WiFi connection timeout
-#define WIFI_CONNECT_TIMEOUT_MS  15000
+// Wi-Fi join: per-attempt timeout, then exponential backoff between attempts
+#define WIFI_CONNECT_TIMEOUT_MS  20000
+#define WIFI_BACKOFF_MIN_MS       2000
+#define WIFI_BACKOFF_MAX_MS      30000
+// Fast-fail statuses (wrong password, SSID missing) are ignored for this
+// long after WiFi.begin() so a stale status from the previous attempt
+// cannot fail the new one.
+#define WIFI_STATUS_GRACE_MS      1500
+
+// Server stage: report NO_INTERNET after this long on Wi-Fi without
+// authenticating, and cycle the Wi-Fi link if it lasts this long.
+#define CLOUD_NO_INTERNET_MS     20000
+#define CLOUD_STALL_RESET_MS    120000
+
+#define WIFI_SCAN_TIMEOUT_MS     15000
 
 // WebSocket reconnect interval
 #define WS_RECONNECT_INTERVAL_MS 5000
@@ -112,29 +143,20 @@
 #define GSR_PIN  1
 
 // ============================================================
-// LED PINS & SETTINGS
+// LED (single onboard WS2812)
 // ============================================================
-// Orange  (#FF5A00) → WiFi state
-// Purple  (#7B2FFF) → Session state
+// Blue  → connectivity state
+// Green → therapy session state
 //
-// Two separate RGB LEDs (or two WS2812 pixels) wired to:
-//   LED_R_PIN, LED_G_PIN, LED_B_PIN  — the single RGB LED
-// If you have a single common-anode RGB LED invert the PWM
-// duty by setting LED_COMMON_ANODE 1.
-//
-// For battery saving, maximum duty is capped at LED_MAX_DUTY
-// (0–255).  50/255 ≈ 20 % duty cycle keeps the LED clearly
-// visible while drawing ~80 % less current than full bright.
+// Brightness is capped at LED_MAX_DUTY (0–255) to save battery
+// while keeping the LED clearly visible.
 // ============================================================
 #define LED_PIN         38    // onboard WS2812 (try 48 if 38 doesn't light up)
 #define LED_COUNT       1
 
 #define LED_MAX_DUTY      48      // 0-255; ~19% duty: visible while still battery-conscious
 
-// Colour presets — scaled to LED_MAX_DUTY at definition time
-// Orange #FF5A00  → R=255 G=90  B=0
-// Purple #7B2FFF  → R=123 G=47  B=255
-// Blue → WiFi indication
+// Blue → connectivity indication
 #define BLUE_R  0
 #define BLUE_G  0
 #define BLUE_B  LED_MAX_DUTY
@@ -172,27 +194,61 @@ BLECharacteristic*   pSessionStateChar    = nullptr;
 
 Adafruit_NeoPixel pixel(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
-volatile bool        bleClientConnected   = false;
-volatile bool        wifiScanRequested    = false;
+// --- BLE → loop() handoff ---
+// BLE callbacks run on the Bluetooth task, not the loop() task. They
+// only set these flags (and pendingCreds under provisionMux); all Wi-Fi,
+// NVS and status work happens in loop().
+volatile bool          bleClientConnected    = false;
+volatile bool          bleRestartAdvertising = false;
+volatile unsigned long bleDisconnectedAt     = 0;
+volatile bool          wifiScanRequested     = false;
 
-// --- WiFi / Credentials ---
-Preferences wifiPreferences;
-String savedSSID     = "";
-String savedPassword = "";
-String wifiStatus    = "NO_CREDENTIALS";
-int    savedWifiRetryCount = 0;
+struct WifiCredentials {
+  char ssid[33];       // 802.11 SSID: 1–32 bytes
+  char password[65];   // WPA passphrase 8–63 chars, 64-hex PSK, or empty (open)
+};
+
+portMUX_TYPE           provisionMux          = portMUX_INITIALIZER_UNLOCKED;
+WifiCredentials        pendingCreds;                   // guarded by provisionMux
+volatile bool          pendingCredsReady     = false;  // guarded by provisionMux
+volatile bool          pendingForget         = false;  // guarded by provisionMux
+volatile bool          pendingRejected       = false;
+
+// --- Connectivity (loop() task only) ---
+enum class NetState : uint8_t {
+  NoCredentials,
+  WifiConnecting,    // WiFi.begin() issued, waiting to join
+  WifiBackoff,       // last join failed; waiting before the next attempt
+  CloudConnecting,   // joined Wi-Fi; WebSocket not yet authenticated
+  Online,            // authenticated; streaming
+};
+
+WifiCredentials activeCreds          = {};
+bool            hasCredentials       = false;
+NetState        netState             = NetState::NoCredentials;
+unsigned long   netStateSince        = 0;
+unsigned long   wifiAttemptStartedAt = 0;
+unsigned long   wifiNextAttemptAt    = 0;
+uint32_t        wifiBackoffMs        = WIFI_BACKOFF_MIN_MS;
+bool            cloudStallReported   = false;
+bool            cloudStarted         = false;
+bool            wifiScanActive       = false;
+unsigned long   wifiScanStartedAt    = 0;
+const char*     wifiStatus           = "NO_CREDENTIALS";  // always a string literal
+
+// Last Wi-Fi disconnect reason (wifi_err_reason_t), written by the
+// Wi-Fi event task. Single byte, so reads and writes are atomic.
+volatile uint8_t lastDisconnectReason = 0;
 
 // --- WebSocket ---
 WebSocketsClient     wsClient;
 String               wsPath;
-volatile bool        wsConnected          = false;
-volatile bool        wsAuthenticated      = false;
-bool                 wsConnectionStarted  = false;
-unsigned long        wsLastConnectAttempt = 0;
+bool                 wsConnected          = false;
+bool                 wsAuthenticated      = false;
 
 // --- Session state (drives LED) ---
-// ACTIVE  = WSS authenticated / telemetry session running
-// PAUSED  = session intentionally paused by dashboard
+// Set only by the dashboard over BLE. Transport drops (Wi-Fi or
+// WebSocket) do not change it: the therapy session is still running.
 volatile bool        sessionActive        = false;
 volatile bool        sessionPaused        = false;
 
@@ -230,15 +286,15 @@ void ledOff() {
 // ============================================================
 // LED STATE MACHINE
 // ============================================================
-// Called every loop iteration.  Drives LED based on WiFi +
+// Called every loop iteration.  Drives LED based on connectivity +
 // session state without using delay().
 //
 // Priority (highest first):
-//   Purple constant  → session active
-//   Purple blinking  → session paused / resumed
-//   Orange constant  → WiFi connected, no active session
-//   Orange blinking  → waiting for WiFi
-//   Off              → no credentials / BLE-only mode
+//   Green constant  → session active
+//   Green blinking  → session paused
+//   Blue constant   → streaming to the server, no active session
+//   Blue blinking   → connecting / retrying
+//   Off             → no Wi-Fi credentials stored
 // ============================================================
 
 void updateLED() {
@@ -254,32 +310,27 @@ void updateLED() {
   }
 
   if (sessionActive && !sessionPaused) {
-    // Purple constant — session running
     ledSetRGB(GREEN_R, GREEN_G, GREEN_B);
     return;
   }
 
   if (sessionPaused) {
-    // Purple blinking — session paused
     if (blinkOn) ledSetRGB(GREEN_R, GREEN_G, GREEN_B);
     else         ledOff();
     return;
   }
 
-  if (wifiStatus == "CONNECTED") {
-    // Orange constant — WiFi up, no active session
+  if (netState == NetState::Online) {
     ledSetRGB(BLUE_R, BLUE_G, BLUE_B);
     return;
   }
 
-  if (wifiStatus == "CONNECTING") {
-    // Orange blinking — waiting for WiFi
+  if (netState != NetState::NoCredentials) {
     if (blinkOn) ledSetRGB(BLUE_R, BLUE_G, BLUE_B);
     else         ledOff();
     return;
   }
 
-  // No credentials / error
   ledOff();
 }
 
@@ -737,48 +788,114 @@ class ServerCallbacks : public BLEServerCallbacks {
     bleClientConnected = true;
   }
   void onDisconnect(BLEServer* pSrv) override {
-    bleClientConnected = false;
-    delay(500);
-    pSrv->startAdvertising();
+    // Advertising restarts from loop() after a short pause so this
+    // callback never blocks the Bluetooth task.
+    bleClientConnected    = false;
+    bleDisconnectedAt     = millis();
+    bleRestartAdvertising = true;
   }
 };
 
 // ============================================================
-// WIFI STATUS HELPER
+// WIFI STATUS (loop() task only)
 // ============================================================
 
-void setWifiStatus(const String& status) {
+void setWifiStatus(const char* status) {
+  if (strcmp(wifiStatus, status) == 0) return;
   wifiStatus = status;
+  Serial.printf("[WIFI] Status -> %s\n", status);
   if (pWifiStatusChar) {
-    pWifiStatusChar->setValue(status.c_str());
+    pWifiStatusChar->setValue(status);
     if (bleClientConnected) pWifiStatusChar->notify();
   }
 }
 
-void loadSavedWiFiCredentials() {
-  wifiPreferences.begin("wifi", true);
-  savedSSID = wifiPreferences.getString("ssid", "");
-  savedPassword = wifiPreferences.getString("password", "");
-  wifiPreferences.end();
-
-  if (savedSSID.isEmpty()) {
-    setWifiStatus("NO_CREDENTIALS");
-    return;
-  }
-
-  savedWifiRetryCount = 0;
-  setWifiStatus("CONNECTING");
-  WiFi.begin(savedSSID.c_str(), savedPassword.c_str());
-  wsLastConnectAttempt = millis();
-  Serial.println("[WIFI] Saved credentials found; reconnecting automatically");
+void setNetState(NetState state, unsigned long now) {
+  netState      = state;
+  netStateSince = now;
 }
 
-void saveWiFiCredentials(const String& ssid, const String& password) {
-  wifiPreferences.begin("wifi", false);
-  wifiPreferences.putString("ssid", ssid);
-  wifiPreferences.putString("password", password);
-  wifiPreferences.end();
-  Serial.println("[WIFI] Credentials saved to NVS");
+// ============================================================
+// WIFI CREDENTIALS (NVS namespace "wifi")
+// ============================================================
+
+// Validates and copies into a zeroed struct, so no bytes from a
+// previous (longer) SSID or password can survive.
+bool copyCredentials(WifiCredentials& out, const char* ssid, const char* password) {
+  const size_t ssidLen = strlen(ssid);
+  const size_t passLen = strlen(password);
+  if (ssidLen == 0 || ssidLen > 32) return false;
+  if (passLen > 64 || (passLen > 0 && passLen < 8)) return false;
+  if (passLen == 64) {  // a raw PSK must be hex
+    for (size_t i = 0; i < passLen; i++) {
+      if (!isxdigit(static_cast<unsigned char>(password[i]))) return false;
+    }
+  }
+
+  memset(&out, 0, sizeof(out));
+  memcpy(out.ssid, ssid, ssidLen);
+  memcpy(out.password, password, passLen);
+  return true;
+}
+
+bool loadStoredCredentials(WifiCredentials& out) {
+  Preferences prefs;
+  if (!prefs.begin("wifi", true)) return false;  // namespace absent on first boot
+  String ssid     = prefs.getString("ssid", "");
+  String password = prefs.getString("password", "");
+  prefs.end();
+  return copyCredentials(out, ssid.c_str(), password.c_str());
+}
+
+// clear() first so nothing from the previous network is left in the
+// namespace, then read back to confirm the write actually landed.
+bool storeCredentials(const WifiCredentials& creds) {
+  Preferences prefs;
+  if (!prefs.begin("wifi", false)) return false;
+  prefs.clear();
+  prefs.putString("ssid", creds.ssid);
+  prefs.putString("password", creds.password);
+  const bool ok = prefs.getString("ssid", "") == creds.ssid &&
+                  prefs.getString("password", "") == creds.password;
+  prefs.end();
+  return ok;
+}
+
+void clearStoredCredentials() {
+  Preferences prefs;
+  if (!prefs.begin("wifi", false)) return;
+  prefs.clear();
+  prefs.end();
+}
+
+// ============================================================
+// WIFI EVENTS (runs on the Wi-Fi event task)
+// ============================================================
+
+void onWifiEvent(arduino_event_id_t event, arduino_event_info_t info) {
+  if (event != ARDUINO_EVENT_WIFI_STA_DISCONNECTED) return;
+  const uint8_t reason = info.wifi_sta_disconnected.reason;
+  // ASSOC_LEAVE is our own WiFi.disconnect(); it says nothing about
+  // why the network rejected us, so never let it mask a real reason.
+  if (reason != WIFI_REASON_ASSOC_LEAVE) lastDisconnectReason = reason;
+}
+
+const char* classifyWifiFailure(uint8_t reason, wl_status_t status) {
+  switch (reason) {
+    case WIFI_REASON_AUTH_FAIL:
+    case WIFI_REASON_4WAY_HANDSHAKE_TIMEOUT:
+    case WIFI_REASON_HANDSHAKE_TIMEOUT:
+      return "FAILED_AUTH";
+    case WIFI_REASON_NO_AP_FOUND:
+      return "NO_NETWORK";
+    default:
+      break;
+  }
+  // 210-212: NO_AP_FOUND_W_COMPATIBLE_SECURITY / _IN_AUTHMODE_THRESHOLD /
+  // _IN_RSSI_THRESHOLD (ESP-IDF 5.x). Numeric so older cores still build.
+  if (reason >= 210 && reason <= 212) return "NO_NETWORK";
+  if (status == WL_NO_SSID_AVAIL) return "NO_NETWORK";
+  return "FAILED";
 }
 
 // ============================================================
@@ -793,26 +910,10 @@ void sendScanResult(const String& json) {
 }
 
 // ============================================================
-// PERFORM WIFI SCAN (called from main loop)
+// SEND WIFI SCAN RESULTS (n = completed async scan count)
 // ============================================================
 
-void performWifiScan() {
-  if (WiFi.getMode() == WIFI_OFF) {
-    WiFi.mode(WIFI_STA);
-    delay(200);
-  }
-
-  int n = WiFi.scanNetworks(false, false);
-
-  if (n == WIFI_SCAN_FAILED || n < 0) {
-    sendScanResult("{\"type\":\"error\",\"message\":\"SCAN_FAILED\"}");
-    return;
-  }
-  if (n == 0) {
-    sendScanResult("{\"type\":\"end\",\"count\":0}");
-    return;
-  }
-
+void sendScanResults(int n) {
   for (int i = 0; i < n; i++) {
     StaticJsonDocument<256> doc;
     doc["type"]    = "network";
@@ -836,36 +937,40 @@ void performWifiScan() {
 }
 
 // ============================================================
-// WIFI CONFIG CALLBACK
+// WIFI CONFIG CALLBACK (Bluetooth task)
 // ============================================================
-// Credentials are stored and a flag set; the actual WiFi.begin()
-// call happens in loop() on the main stack to avoid running WiFi
-// SDK calls inside a BLE interrupt context (race-condition fix).
-
-struct PendingWifiConnect {
-  bool   requested = false;
-  String ssid;
-  String password;
-  int    retryCount = 0;
-};
-static PendingWifiConnect pendingWifi;
-static bool wifiScanInProgress = false;
+// Only validates and hands the request to loop(). The newest write
+// always wins: new credentials cancel a pending forget and vice versa.
 
 class WifiConfigCallback : public BLECharacteristicCallbacks {
   void onWrite(BLECharacteristic* pChar) override {
     String payload = pChar->getValue();
-    payload.trim();
 
-    StaticJsonDocument<256> doc;
+    StaticJsonDocument<384> doc;
     if (deserializeJson(doc, payload) != DeserializationError::Ok) {
+      pendingRejected = true;
       return;
     }
 
-    pendingWifi.ssid       = doc["ssid"].as<String>();
-    pendingWifi.password   = doc["password"].as<String>();
-    pendingWifi.requested  = true;
-    pendingWifi.retryCount = 0;
-    setWifiStatus("CONNECTING");
+    if (doc["forget"] | false) {
+      portENTER_CRITICAL(&provisionMux);
+      pendingForget     = true;
+      pendingCredsReady = false;
+      portEXIT_CRITICAL(&provisionMux);
+      return;
+    }
+
+    WifiCredentials creds;
+    if (!copyCredentials(creds, doc["ssid"] | "", doc["password"] | "")) {
+      pendingRejected = true;
+      return;
+    }
+
+    portENTER_CRITICAL(&provisionMux);
+    pendingCreds      = creds;
+    pendingCredsReady = true;
+    pendingForget     = false;
+    portEXIT_CRITICAL(&provisionMux);
   }
 };
 
@@ -886,12 +991,12 @@ class WifiScanRequestCallback : public BLECharacteristicCallbacks {
 // SESSION STATE CONTROL
 // ============================================================
 // BLE command values:
-//   ACTIVE / RESUME  -> purple constant
-//   PAUSED / PAUSE   -> purple blinking
-//   STOPPED          -> return to WiFi indication
+//   ACTIVE / RESUME  -> green constant
+//   PAUSED / PAUSE   -> green blinking
+//   STOPPED          -> return to connectivity indication
 //
 // Session state is controlled explicitly by the dashboard over BLE.
-// WSS authentication does not change the therapy session state.
+// Wi-Fi and WebSocket events never change it.
 
 void applySessionState(const String& command) {
   String state = command;
@@ -945,11 +1050,9 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t /*length*/) {
       break;
 
     case WStype_DISCONNECTED:
+      if (wsConnected) Serial.println("[WS] Disconnected");
       wsConnected     = false;
       wsAuthenticated = false;
-      sessionActive   = false;
-      sessionPaused   = false;
-      Serial.printf("[WS] Disconnected\n");
       break;
 
     case WStype_CONNECTED: {
@@ -959,6 +1062,7 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t /*length*/) {
       StaticJsonDocument<128> hello;
       hello["type"] = "device_hello";
       hello["band_id"] = BAND_ID;
+      hello["fw"] = FIRMWARE_VERSION;
       String helloJson;
       serializeJson(hello, helloJson);
       wsClient.sendTXT(helloJson);
@@ -1030,24 +1134,257 @@ String urlEncode(const String& input) {
   return encoded;
 }
 
-void connectWebSocket() {
-  if (WiFi.status() != WL_CONNECTED) return;
-
-  wsPath = String("/functions/v1/wearable-ws?band_id=") +
-           urlEncode(BAND_ID) +
-           "&token=" +
-           urlEncode(DEVICE_TOKEN);
-
-  wsClient.onEvent(onWsEvent);
+// Opens the WebSocket once Wi-Fi is up. After this the library
+// reconnects on its own (WS_RECONNECT_INTERVAL_MS) for as long as
+// wsClient.loop() keeps being called.
+void startCloud(unsigned long now) {
+  wsConnected     = false;
+  wsAuthenticated = false;
   // Supabase Edge Functions supports the dedicated functions host for function endpoints.
   // Keep the WSS connection on the functions host so the WebSocket upgrade reaches
   // the Edge Function runtime directly.
   wsClient.beginSSL(WS_HOST, 443, wsPath.c_str(), nullptr, "");
   wsClient.setReconnectInterval(WS_RECONNECT_INTERVAL_MS);
   wsClient.enableHeartbeat(25000, 8000, 3);
-  wsLastConnectAttempt = millis();
+  cloudStarted       = true;
+  cloudStallReported = false;
 
-  Serial.printf("[WS] Connecting to Supabase Edge Function: %s:443%s\n", WS_HOST, wsPath.c_str());
+  setNetState(NetState::CloudConnecting, now);
+  setWifiStatus("CLOUD_CONNECTING");
+  // The path carries the device token, so log only the host.
+  Serial.printf("[WIFI] Joined \"%s\" (IP %s, RSSI %d dBm, ch %d); connecting to %s\n",
+                activeCreds.ssid, WiFi.localIP().toString().c_str(),
+                WiFi.RSSI(), WiFi.channel(), WS_HOST);
+}
+
+void stopCloud() {
+  if (cloudStarted) wsClient.disconnect();
+  cloudStarted    = false;
+  wsConnected     = false;
+  wsAuthenticated = false;
+}
+
+// ============================================================
+// CONNECTIVITY STATE MACHINE (loop() task only)
+// ============================================================
+
+void startWifiAttempt(unsigned long now) {
+  lastDisconnectReason = 0;
+  WiFi.begin(activeCreds.ssid,
+             activeCreds.password[0] ? activeCreds.password : nullptr);
+  wifiAttemptStartedAt = now;
+  setNetState(NetState::WifiConnecting, now);
+}
+
+void enterBackoff(unsigned long now, const char* failureStatus) {
+  Serial.printf("[WIFI] Join failed for \"%s\" (reason %u, status %d); retry in %lu ms\n",
+                activeCreds.ssid, lastDisconnectReason, (int)WiFi.status(),
+                (unsigned long)wifiBackoffMs);
+  WiFi.disconnect(false);
+  setWifiStatus(failureStatus);
+  wifiNextAttemptAt = now + wifiBackoffMs;
+  wifiBackoffMs = (wifiBackoffMs * 2 > WIFI_BACKOFF_MAX_MS) ? WIFI_BACKOFF_MAX_MS
+                                                            : wifiBackoffMs * 2;
+  setNetState(NetState::WifiBackoff, now);
+}
+
+// Drops the link and starts a fresh join to activeCreds.
+void restartWifi(unsigned long now) {
+  stopCloud();
+  WiFi.disconnect(false);  // waits up to 100 ms for the old link to drop
+  wifiBackoffMs = WIFI_BACKOFF_MIN_MS;
+  setWifiStatus("CONNECTING");
+  startWifiAttempt(now);
+}
+
+// New credentials from BLE. Everything left over from the previous
+// network (backoff delay, failure status, disconnect reason, cloud
+// session) is discarded before the first attempt on the new one.
+void applyNewCredentials(const WifiCredentials& creds, unsigned long now) {
+  activeCreds    = creds;
+  hasCredentials = true;
+  if (storeCredentials(activeCreds)) {
+    Serial.printf("[WIFI] New credentials for \"%s\" saved\n", activeCreds.ssid);
+  } else {
+    // Still connect with the in-RAM copy; only a reboot would lose them.
+    Serial.println("[WIFI] ERROR: credentials could not be written to NVS");
+  }
+  restartWifi(now);
+}
+
+void forgetCredentials(unsigned long now) {
+  stopCloud();
+  WiFi.disconnect(false);
+  clearStoredCredentials();
+  memset(&activeCreds, 0, sizeof(activeCreds));
+  hasCredentials = false;
+  wifiBackoffMs  = WIFI_BACKOFF_MIN_MS;
+  setNetState(NetState::NoCredentials, now);
+  setWifiStatus("NO_CREDENTIALS");
+  Serial.println("[WIFI] Credentials forgotten");
+}
+
+// Picks up anything the BLE callbacks handed over. Forget is handled
+// before credentials; the callback already guarantees only the newest
+// of the two is pending.
+void serviceProvisioning(unsigned long now) {
+  // A malformed write never disturbs an existing network. The status is
+  // only surfaced when there is no network to report on instead.
+  if (pendingRejected) {
+    pendingRejected = false;
+    Serial.println("[WIFI] Ignored malformed Wi-Fi config write");
+    if (!hasCredentials) setWifiStatus("INVALID_CREDENTIALS");
+  }
+
+  // An async scan owns the radio; apply changes once it finishes.
+  if (wifiScanActive) return;
+
+  bool forget = false;
+  bool haveCreds = false;
+  WifiCredentials creds;
+
+  portENTER_CRITICAL(&provisionMux);
+  if (pendingForget) {
+    forget = true;
+    pendingForget = false;
+  } else if (pendingCredsReady) {
+    creds = pendingCreds;
+    haveCreds = true;
+    pendingCredsReady = false;
+  }
+  portEXIT_CRITICAL(&provisionMux);
+
+  if (forget)    forgetCredentials(now);
+  if (haveCreds) applyNewCredentials(creds, now);
+}
+
+void serviceNetwork(unsigned long now) {
+  if (!hasCredentials) return;
+
+  // While scanning, pause join attempts (they would make the scan fail),
+  // but keep an established link and its WebSocket serviced.
+  if (wifiScanActive &&
+      netState != NetState::CloudConnecting && netState != NetState::Online) {
+    return;
+  }
+
+  const wl_status_t wl = WiFi.status();
+
+  switch (netState) {
+    case NetState::NoCredentials:
+      break;
+
+    case NetState::WifiConnecting: {
+      // Right after switching networks the driver can briefly still
+      // report the previous association (the disconnect is async), so
+      // only accept a join to the SSID we actually asked for.
+      if (wl == WL_CONNECTED && WiFi.SSID() == activeCreds.ssid) {
+        wifiBackoffMs = WIFI_BACKOFF_MIN_MS;
+        startCloud(now);
+        break;
+      }
+      const unsigned long elapsed = now - wifiAttemptStartedAt;
+      const bool fastFail = elapsed > WIFI_STATUS_GRACE_MS &&
+                            (wl == WL_CONNECT_FAILED || wl == WL_NO_SSID_AVAIL);
+      if (fastFail || elapsed > WIFI_CONNECT_TIMEOUT_MS) {
+        enterBackoff(now, classifyWifiFailure(lastDisconnectReason, wl));
+      }
+      break;
+    }
+
+    case NetState::WifiBackoff:
+      if ((long)(now - wifiNextAttemptAt) >= 0) startWifiAttempt(now);
+      break;
+
+    case NetState::CloudConnecting:
+    case NetState::Online: {
+      if (wl != WL_CONNECTED) {
+        Serial.printf("[WIFI] Link to \"%s\" lost (reason %u); re-joining\n",
+                      activeCreds.ssid, lastDisconnectReason);
+        restartWifi(now);
+        break;
+      }
+
+      wsClient.loop();
+
+      if (wsConnected && wsAuthenticated) {
+        if (netState != NetState::Online) {
+          setNetState(NetState::Online, now);
+          cloudStallReported = false;
+          setWifiStatus("CONNECTED");
+        }
+        break;
+      }
+
+      if (netState == NetState::Online) {
+        setNetState(NetState::CloudConnecting, now);
+        setWifiStatus("CLOUD_CONNECTING");
+      }
+
+      const unsigned long waited = now - netStateSince;
+      if (!cloudStallReported && waited > CLOUD_NO_INTERNET_MS) {
+        cloudStallReported = true;
+        Serial.println("[WIFI] On Wi-Fi but the server is unreachable (captive portal or firewall?)");
+        setWifiStatus("NO_INTERNET");
+      }
+      if (waited > CLOUD_STALL_RESET_MS) {
+        Serial.println("[WIFI] Server unreachable for too long; cycling the Wi-Fi link");
+        restartWifi(now);
+      }
+      break;
+    }
+  }
+}
+
+// ============================================================
+// WIFI SCAN (async; requested over BLE)
+// ============================================================
+
+void startWifiScan(unsigned long now) {
+  if (wifiScanActive) return;
+
+  // A join in progress makes the scan fail. Drop it; it restarts,
+  // with fresh backoff, as soon as the scan completes.
+  if (netState == NetState::WifiConnecting || netState == NetState::WifiBackoff) {
+    WiFi.disconnect(false);
+  }
+
+  if (WiFi.scanNetworks(true /* async */, false /* hidden */) == WIFI_SCAN_FAILED) {
+    sendScanResult("{\"type\":\"error\",\"message\":\"SCAN_FAILED\"}");
+    if (hasCredentials && netState != NetState::CloudConnecting &&
+        netState != NetState::Online) {
+      startWifiAttempt(now);
+    }
+    return;
+  }
+
+  wifiScanActive    = true;
+  wifiScanStartedAt = now;
+}
+
+void serviceWifiScan(unsigned long now) {
+  if (!wifiScanActive) return;
+
+  const int16_t n = WiFi.scanComplete();
+  if (n == WIFI_SCAN_RUNNING) {
+    if (now - wifiScanStartedAt <= WIFI_SCAN_TIMEOUT_MS) return;
+    WiFi.scanDelete();
+    sendScanResult("{\"type\":\"error\",\"message\":\"SCAN_TIMEOUT\"}");
+  } else if (n < 0) {
+    sendScanResult("{\"type\":\"error\",\"message\":\"SCAN_FAILED\"}");
+  } else {
+    sendScanResults(n);
+  }
+
+  wifiScanActive = false;
+  // Resume the interrupted join, unless new credentials or a forget are
+  // already waiting; serviceProvisioning() applies those next loop.
+  const bool provisioningPending = pendingCredsReady || pendingForget;
+  if (hasCredentials && !provisioningPending &&
+      (netState == NetState::WifiConnecting || netState == NetState::WifiBackoff)) {
+    wifiBackoffMs = WIFI_BACKOFF_MIN_MS;
+    startWifiAttempt(now);
+  }
 }
 
 // ============================================================
@@ -1124,7 +1461,7 @@ void setupBLE() {
     WIFI_STATUS_UUID,
     BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
   pWifiStatusChar->addDescriptor(new BLE2902());
-  pWifiStatusChar->setValue(wifiStatus.c_str());
+  pWifiStatusChar->setValue(wifiStatus);
 
   // 0x0006 WiFi Scan Request (write)
   pWifiScanRequestChar = pService->createCharacteristic(
@@ -1153,12 +1490,7 @@ void setupBLE() {
 }
 
 // ============================================================
-// SETUP LED PWM
-// ============================================================
-// ESP32 Arduino core v3 unified the old ledcSetup() +
-// ledcAttachPin() pair into a single ledcAttach() call.
-// ledcWrite() still takes a pin number (not a channel number)
-// in v3, so ledSetRGB() is updated to match.
+// SETUP LED
 // ============================================================
 
 void setupLED() {
@@ -1191,13 +1523,34 @@ void setup() {
 
   pinMode(GSR_PIN, INPUT);
 
+  // Our NVS namespace is the only credential store, and every reconnect
+  // is driven by serviceNetwork(); both must be set before WiFi starts.
+  WiFi.persistent(false);
+  WiFi.setAutoReconnect(false);
+  WiFi.onEvent(onWifiEvent);
+
   // WiFi radio in STA mode before BLE starts — required so that
   // WiFi.scanNetworks() works without coexistence conflicts.
   WiFi.mode(WIFI_STA);
-  loadSavedWiFiCredentials();
+
+  wsPath = String("/functions/v1/wearable-ws?band_id=") +
+           urlEncode(BAND_ID) +
+           "&token=" +
+           urlEncode(DEVICE_TOKEN);
+  wsClient.onEvent(onWsEvent);
 
   setupBLE();
 
+  if (loadStoredCredentials(activeCreds)) {
+    hasCredentials = true;
+    Serial.printf("[WIFI] Stored credentials for \"%s\"; connecting\n", activeCreds.ssid);
+    setWifiStatus("CONNECTING");
+    startWifiAttempt(millis());
+  } else {
+    setWifiStatus("NO_CREDENTIALS");
+  }
+
+  Serial.printf("[BOOT] %s firmware %s\n", BAND_ID, FIRMWARE_VERSION);
   Serial.printf("[BOOT] Sensors MPU=%s STTS22H=%s MAX30102=%s\n",
                 mpuFound ? "OK" : "MISSING",
                 sttsFound ? "OK" : "MISSING",
@@ -1219,98 +1572,30 @@ void loop() {
   // ── LED state machine ──────────────────────────────────────
   updateLED();
 
-  // ── WiFi scan (flag set from BLE callback) ─────────────────
+  // ── BLE housekeeping ───────────────────────────────────────
+  if (bleRestartAdvertising && now - bleDisconnectedAt >= 500) {
+    bleRestartAdvertising = false;
+    BLEDevice::startAdvertising();
+  }
+
+  // ── Scan, provisioning and connectivity ────────────────────
+  // Order matters. A scan that just finished releases the radio first;
+  // new credentials are then applied before the state machine runs, so
+  // an old retry or timeout can never act on (or report against) them.
+  serviceWifiScan(now);
+  serviceProvisioning(now);
+
   if (wifiScanRequested) {
     wifiScanRequested = false;
-    wifiScanInProgress = true;
-    performWifiScan();
-    wifiScanInProgress = false;
+    startWifiScan(now);
   }
 
-  // ── Pending WiFi connect (flag set from BLE callback) ──────
-  // Execute on main-loop stack to avoid running WiFi SDK calls
-  // inside a BLE interrupt context.
-  if (pendingWifi.requested && !wifiScanInProgress) {
-    pendingWifi.requested = false;
-    savedSSID     = pendingWifi.ssid;
-    savedPassword = pendingWifi.password;
-    saveWiFiCredentials(savedSSID, savedPassword);
-    savedWifiRetryCount = 0;
+  serviceNetwork(now);
 
-    // Do not erase NVS credentials during a reconnect attempt.
-    // BLE provisioning has already supplied the new credentials.
-    WiFi.disconnect(false);
-    delay(100);
-    WiFi.mode(WIFI_STA);
-    WiFi.begin(savedSSID.c_str(), savedPassword.c_str());
-    wsLastConnectAttempt = now;
-  }
-
-  // ── WiFi connection monitor ────────────────────────────────
-  if (!savedSSID.isEmpty() && !wifiScanInProgress) {
-    wl_status_t wlStatus = WiFi.status();
-
-    if (wlStatus == WL_CONNECTED && !wsConnectionStarted) {
-      // Transition INTO WiFi-connected. Start the WebSocket, but wait for
-      // it to actually authenticate before declaring "CONNECTED" over BLE —
-      // WiFi.status() alone can stay WL_CONNECTED for a while after the
-      // router/internet actually goes down. wsConnectionStarted guards
-      // against calling connectWebSocket() on every loop() iteration
-      // while waiting for authentication.
-      wsConnectionStarted = true;
-      connectWebSocket();
-    } else if (wlStatus != WL_CONNECTED && wifiStatus == "CONNECTED") {
-      // FIX: WiFi dropped after having been connected. Without this branch,
-      // wifiStatus (and the WS/session flags) stayed stuck on "CONNECTED"
-      // forever, so the dashboard kept showing the band as connected even
-      // after its WiFi actually went down. Reflect reality immediately and
-      // fall back into the normal CONNECTING/retry path below.
-      Serial.println("[WIFI] Connection lost — was CONNECTED, now reconnecting");
-      setWifiStatus("CONNECTING");
-      wsConnected           = false;
-      wsAuthenticated       = false;
-      wsConnectionStarted   = false;
-      sessionActive         = false;
-      sessionPaused         = false;
-      wsLastConnectAttempt  = now;
-      savedWifiRetryCount   = 0;
-    } else if (wifiStatus == "CONNECTING" && now - wsLastConnectAttempt > WIFI_CONNECT_TIMEOUT_MS) {
-      if (savedWifiRetryCount < 1) {
-        // Auto-retry once using the persisted credentials.
-        savedWifiRetryCount++;
-        WiFi.disconnect(false);
-        delay(100);
-        WiFi.mode(WIFI_STA);
-        WiFi.begin(savedSSID.c_str(), savedPassword.c_str());
-        wsLastConnectAttempt = now;
-        setWifiStatus("CONNECTING");
-      } else {
-        setWifiStatus("FAILED");
-      }
-    } else if (wlStatus == WL_NO_SSID_AVAIL && wifiStatus != "INVALID") {
-      // Check timeout here as well before failing, in case of scan delay
-      if (now - wsLastConnectAttempt > WIFI_CONNECT_TIMEOUT_MS) {
-         setWifiStatus("INVALID");
-      }
-    }
-  }
-
-  // ── WebSocket maintenance ──────────────────────────────────
-  if (WiFi.status() == WL_CONNECTED) {
-    wsClient.loop();
-
-    // Only now, once the WebSocket has actually authenticated with
-    // Supabase, do we trust that the internet connection is real.
-    if (wsConnected && wsAuthenticated && wifiStatus != "CONNECTED") {
-      setWifiStatus("CONNECTED");
-    }
-
-    if (wsConnected && wsAuthenticated) {
-      if (now - lastSensorSend >= SENSOR_INTERVAL_MS) {
-        lastSensorSend = now;
-        sendSensorPacket();
-      }
-    }
+  // ── Telemetry ──────────────────────────────────────────────
+  if (netState == NetState::Online && now - lastSensorSend >= SENSOR_INTERVAL_MS) {
+    lastSensorSend = now;
+    sendSensorPacket();
   }
 
   // ── Watchdog-safe yield ────────────────────────────────────
