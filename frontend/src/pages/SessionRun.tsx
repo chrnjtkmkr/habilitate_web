@@ -25,6 +25,11 @@ import { domainI18nKeys } from '../lib/domainLabels';
 import { getDomainIcon, getSimplifiedGoal, getHelpLadder, pickField, pickArrayField, formatAgeRange } from '../lib/activity/content';
 import { useActivityLookup } from '../lib/queries/activities';
 import ActivityPicker from '../components/ActivityPicker';
+import DeviceSetupCard from '../components/device/DeviceSetupCard';
+import {
+  reconnectToAuthorizedHabilitateBand,
+  setWearableSessionState,
+} from '../services/bleService';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import Pill from '../components/Pill';
@@ -53,6 +58,27 @@ export default function SessionRun() {
 
   const toast = useToast((s) => s.add);
   const isDebugMode = new URLSearchParams(window.location.search).get('debug') === '1';
+
+  // Session control is sent over the already-authorized BLE connection.
+  // BLE is the control plane; sensor data never travels through BLE.
+  const syncBandSessionState = useCallback(
+    async (state: 'ACTIVE' | 'RESUME' | 'PAUSE' | 'STOPPED') => {
+      try {
+        const preferredBandId = localStorage.getItem('habilitate.bandId');
+        if (!preferredBandId) return false;
+
+        const restored = await reconnectToAuthorizedHabilitateBand(preferredBandId);
+        if (!restored) return false;
+
+        await setWearableSessionState(restored.device, state);
+        return true;
+      } catch (error) {
+        console.warn('[Wearable] session-state sync failed', state, error);
+        return false;
+      }
+    },
+    [],
+  );
 
   const { data: session, isLoading: sessionLoading } = useSession(sessionId);
   const { data: sessionActivities } = useSessionActivities(sessionId);
@@ -314,11 +340,20 @@ export default function SessionRun() {
         setFrozenMetrics(cvMetricsLatestRef.current);
         cvAdapterRef.current?.pause();
         if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        void syncBandSessionState('PAUSE');
       }
     }
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [phase]);
+  }, [phase, syncBandSessionState]);
+
+  // Whenever the live phase starts (including session resume after refresh),
+  // put the band into ACTIVE state. This is intentionally best-effort because
+  // telemetry itself does not depend on BLE once Wi-Fi/WSS is established.
+  useEffect(() => {
+    if (phase !== 'live') return;
+    void syncBandSessionState('ACTIVE');
+  }, [phase, syncBandSessionState]);
 
   // Session timer
   useEffect(() => {
@@ -577,6 +612,8 @@ export default function SessionRun() {
   }
 
   async function handleEndSession() {
+    await syncBandSessionState('STOPPED');
+
     // End current activity
     if (currentActivity) {
       await endActivityMut.mutateAsync({ sessionActivityId: currentActivity.id });
@@ -614,12 +651,14 @@ export default function SessionRun() {
       isPausedRef.current = false;
       setFrozenMetrics(null);
       cvAdapterRef.current?.resume();
+      void syncBandSessionState('RESUME');
     } else {
       setIsPaused(true);
       isPausedRef.current = true;
       setFrozenMetrics(cvMetrics);
       cvAdapterRef.current?.pause();
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      void syncBandSessionState('PAUSE');
     }
   }
 
@@ -809,6 +848,9 @@ export default function SessionRun() {
 
           {/* Cards */}
           <div className="space-y-4">
+            {/* Habilitate Therapy Band */}
+            <DeviceSetupCard />
+
             {/* Camera & Microphone */}
             <div className="rounded-2xl border border-border bg-surface p-4">
               <div className="flex items-center justify-between">
