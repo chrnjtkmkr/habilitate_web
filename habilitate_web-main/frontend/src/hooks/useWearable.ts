@@ -1,7 +1,6 @@
 import {
   useCallback,
   useEffect,
-  useRef,
   useState,
 } from 'react';
 
@@ -15,8 +14,6 @@ import {
   type HabilitateBluetoothDevice,
   type WiFiNetwork,
 } from '../services/bleService';
-
-import { supabase } from '../lib/supabase';
 
 export type WearableStatus =
   | 'disconnected'
@@ -36,84 +33,6 @@ export function useWearable() {
 
   const [error, setError] =
     useState<string | null>(null);
-
-  // ==========================================================
-  // ISSUE 1: DEVICE ONLINE STATE (cross-device visibility)
-  // ==========================================================
-  // Polls sensor_devices.is_online for the current bandId.
-  // When the band is connected from another browser/device,
-  // is_online will be true even though this session has no
-  // BLE connection — the UI can then show a warning banner.
-  // ==========================================================
-
-  const [bandIsOnlineElsewhere, setBandIsOnlineElsewhere] =
-    useState(false);
-
-  const [bandOnlineSince, setBandOnlineSince] =
-    useState<string | null>(null);
-
-  const fetchBandOnlineState = useCallback(
-    async (id: string) => {
-      try {
-        const { data } = await supabase
-          .from('sensor_devices')
-          .select('is_online, online_since')
-          .eq('device_uid', id)
-          .maybeSingle();
-
-        if (data) {
-          // The band is considered "online elsewhere" when the
-          // DB shows it is online but this session does not
-          // have an active BLE + WebSocket connection.
-          setBandIsOnlineElsewhere(
-            status !== 'connected' ? (data.is_online ?? false) : false
-          );
-          setBandOnlineSince(data.online_since ?? null);
-        }
-      } catch {
-        // Polling errors are silent — do not disrupt the UI.
-      }
-    },
-    [status],
-  );
-
-  // Subscribe to real-time updates when we know the bandId
-  useEffect(() => {
-    if (!bandId) {
-      setBandIsOnlineElsewhere(false);
-      setBandOnlineSince(null);
-      return;
-    }
-
-    // Fetch immediately
-    void fetchBandOnlineState(bandId);
-
-    const subscription = supabase
-      .channel(`sensor_devices:${bandId}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'sensor_devices',
-          filter: `device_uid=eq.${bandId}`,
-        },
-        (payload) => {
-          const isOnline = payload.new.is_online;
-          const onlineSince = payload.new.online_since;
-          
-          setBandIsOnlineElsewhere(
-             status !== 'connected' ? (isOnline ?? false) : false
-          );
-          setBandOnlineSince(onlineSince ?? null);
-        },
-      )
-      .subscribe();
-
-    return () => {
-      void supabase.removeChannel(subscription);
-    };
-  }, [bandId, status, fetchBandOnlineState]);
 
   // ==========================================================
   // WIFI STATE
@@ -613,10 +532,6 @@ export function useWearable() {
         'connected' &&
       !!device &&
       !!bandId,
-
-    // Issue 1: cross-device band visibility
-    bandIsOnlineElsewhere,
-    bandOnlineSince,
 
     wifiStatus,
     wifiReady,
