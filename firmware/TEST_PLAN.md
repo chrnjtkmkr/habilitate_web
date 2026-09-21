@@ -65,7 +65,7 @@ phone hotspot and the office Wi-Fi), plus one wrong password.
 6. Power-cycle the band. It must come back on **B**
    (`Stored credentials for "B"`), not A, with the same MAC as step 1.
 
-Pass: the band streams on B within about 30 s of step 3, and reconnects
+Pass: the band streams on B within about 30 s of step 4, and reconnects
 to B after the reboot.
 
 ## C2. Switch away from a failing network
