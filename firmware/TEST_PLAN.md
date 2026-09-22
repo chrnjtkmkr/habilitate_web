@@ -9,7 +9,7 @@ lines.
 Every recorded run must include the identity line printed at boot:
 
 ```
-[BOOT] HAB-001 firmware 0.6.1 mac 24:58:7C:XX:XX:XX
+[BOOT] HAB-001 firmware 0.6.2 mac 24:58:7C:XX:XX:XX
 [BOOT] Reset reason: POWERON
 [BOOT] Previous boot: no record (first boot after power-on)
 ```
@@ -231,6 +231,53 @@ stalling and must be reported.
 5. With a second band available (its own `BAND_ID`, see
    PROVISIONING.md), repeat 4 and pick the second band. The card must
    show its band ID, and after a reload only that band is restored.
+
+## S1. Child state, live (engine validation)
+
+Open the session page with `?debug=1` added to the URL. Under the
+therapist's state selector a **Band** line appears, and in debug mode a
+second line shows the provisional (not clinically validated) state, the
+score, each signal's points and deviation (z), the number of valid
+signals, the baseline length and the measured latency.
+
+`CLINICAL_THRESHOLDS_SIGNED_OFF` is false, so the Band line itself only
+ever reads "learning this child's baseline", "not enough reliable
+signals", "live, state withheld until clinically validated" or "no live
+data". The debug line is what this test checks.
+
+Wear the band with the pulse sensor and the GSR electrodes on skin.
+
+1. **Baseline.** Sit still for 2 minutes. Expect "learning this child's
+   baseline (n of 60 s)", then "live, state withheld". The debug line
+   should read provisional `regulated`, score 0-1, 3 valid signals.
+2. **GSR.** Grip the electrodes firmly (or take a sharp breath and hold
+   it for 5 s). Expect the GSR z to rise within a few seconds and GSR to
+   score 1-2 points. **If the GSR z goes negative instead, the GSR
+   direction is inverted**: report it, and `GSR_AROUSAL_DIRECTION` in
+   `frontend/src/lib/childState/engine.ts` becomes -1. Keep it up for
+   15 s: provisional must reach `amber` about 12 s after the score first
+   reached 2, not before.
+3. **Calm down.** Release and sit still. Provisional must stay `amber`
+   for 30 s after the score drops, then return to `regulated`.
+4. **Movement.** Shake the hand for 10 s. Expect motion to score, and
+   GSR and HRV to show "–" (excluded) while the movement is heavy, with
+   the reason "Movement is corrupting the sensors". Never a jump to
+   `dysregulated` from movement alone.
+5. **HRV.** Only a drop in HRV may score; slow deep breathing (which
+   raises HRV) must leave HRV at 0 points.
+6. **Flapping.** Flap the hand at about 3 per second for 5 s: a
+   "Flapping" tag appears. It must not change the score by itself.
+7. **Latency.** The debug line shows latency (end of a second on the
+   band to the screen). Expect about 0.3-1.5 s. The state label changes
+   later by design (12 s to escalate, 30 s to de-escalate).
+8. **No contact.** Take the GSR electrodes off: GSR shows "–" (excluded)
+   rather than a number, once the reading pins at the ADC limit. Note
+   the raw `gsr` value in `device_telemetry` with the electrodes off; if
+   it does not pin, that value becomes `GSR_OPEN_CIRCUIT_ADC` in the
+   firmware.
+
+Send me the times of each step; I can read the matching `band_seconds`
+rows to confirm the engine saw the same thing.
 
 ## C6. Soak
 

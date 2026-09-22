@@ -81,7 +81,7 @@
 // CONFIGURATION — edit these
 // ============================================================
 
-#define FIRMWARE_VERSION "0.6.1"
+#define FIRMWARE_VERSION "0.6.2"
 
 // Beat-detector trace (~3 lines/s plus one per beat). Keep 0 in normal
 // use: at that rate it pushes crash output out of the serial monitor.
@@ -308,14 +308,20 @@ uint32_t             sensorSeq            = 0;
 // SENSOR READING STRUCT
 // ============================================================
 
+// A reading whose *Valid flag is false is sent as JSON null: the server
+// stores NULL and the child-state engine excludes it. A stand-in value
+// (0 g, 25.0 degC, a floating ADC) would be scored as if it were real.
 struct SensorReading {
-  float ax, ay, az;   // Accelerometer (g)      — MPU6050
-  float gx, gy, gz;   // Gyroscope (dps)        — MPU6050
+  float ax, ay, az;   // Accelerometer (g)      — MPU-6500 (WHO_AM_I 0x70)
+  float gx, gy, gz;   // Gyroscope (dps)        — MPU-6500
+  bool  motionValid;
   float temp;          // Temperature (°C)       — STTS22H
+  bool  tempValid;
   float hr;            // Heart rate (BPM) from clean beat intervals, -1 if none
   float hrv;           // RMSSD (ms) from clean beat intervals — -1 if not enough
   float spo2;          // SpO2 (%)               — MAX30102, -1 if no finger
   float gsr;           // GSR (raw ADC counts)   — GPIO1
+  bool  gsrValid;
 };
 
 // ============================================================
@@ -444,7 +450,7 @@ void updateLED() {
 }
 
 // ============================================================
-// MPU6050
+// MPU6050 register map (fitted chip: MPU-6500, WHO_AM_I 0x70, compatible)
 // ============================================================
 
 const int MPU_ADDR = 0x68;
@@ -481,12 +487,15 @@ bool initMPU6050() {
   return true;
 }
 
-void readMPU6050(float &ax, float &ay, float &az,
+// false when the chip does not answer or returns a short read; the
+// values are then not sent (the fitted chip is an MPU-6500, register-
+// compatible with the MPU-6050 for everything used here).
+bool readMPU6050(float &ax, float &ay, float &az,
                  float &gx, float &gy, float &gz) {
   Wire.beginTransmission(MPU_ADDR);
   Wire.write(0x3B); // ACCEL_XOUT_H
-  Wire.endTransmission(false);
-  Wire.requestFrom(MPU_ADDR, 14, true);
+  if (Wire.endTransmission(false) != 0) return false;
+  if (Wire.requestFrom(MPU_ADDR, 14, true) != 14) return false;
 
   int16_t rawAx = (Wire.read() << 8) | Wire.read();
   int16_t rawAy = (Wire.read() << 8) | Wire.read();
@@ -503,6 +512,7 @@ void readMPU6050(float &ax, float &ay, float &az,
   gx = rawGx / 65.5f;     // ±500 °/s
   gy = rawGy / 65.5f;
   gz = rawGz / 65.5f;
+  return true;
 }
 
 // ============================================================
@@ -511,7 +521,10 @@ void readMPU6050(float &ax, float &ay, float &az,
 
 SparkFun_STTS22H temperatureSensor;
 bool             sttsFound            = false;
-float            lastValidTemperature = 25.0f;  // safe physical default
+float            lastValidTemperature = NAN;    // no reading yet: sent as null
+unsigned long    lastValidTempMs      = 0;
+// The sensor updates at 1 Hz; a reading older than this is not current.
+#define TEMP_STALE_MS 10000
 unsigned long    lastTempReadTime     = 0;
 const unsigned long TEMP_POLL_MS      = 200;    // poll faster than 1 Hz ODR
 
@@ -530,6 +543,7 @@ bool initSTTS22H() {
       temperatureSensor.getTemperatureC(&t);
       if (!isnan(t) && t > -40.0f && t < 125.0f) {
         lastValidTemperature = t;
+        lastValidTempMs      = millis();
         return true;
       }
     }
@@ -552,7 +566,13 @@ void updateTemperature() {
 
   if (!isnan(t) && t > -40.0f && t < 125.0f) {
     lastValidTemperature = t;
+    lastValidTempMs      = millis();
   }
+}
+
+bool temperatureValid() {
+  return sttsFound && !isnan(lastValidTemperature) &&
+         millis() - lastValidTempMs <= TEMP_STALE_MS;
 }
 
 // ============================================================
@@ -760,6 +780,23 @@ void acceptInterval(float ibi, uint32_t beatTimeMs) {
     if (fabsf(ibi - ref) > IBI_MAX_DEVIATION * ref) {
       ok = false;
       verdict = "rejected: >25% from reference";
+    }
+  } else if (beat.ibiRefCount > 0) {
+    // Still forming a reference: the first intervals must agree with each
+    // other, or a missed or doubled beat could become the reference. On
+    // disagreement, start again from this interval (not counted as clean).
+    ref = medianOf(beat.ibiRef, beat.ibiRefCount);
+    if (fabsf(ibi - ref) > IBI_MAX_DEVIATION * ref) {
+      beat.ibiRef[0]    = ibi;
+      beat.ibiRefCount  = 1;
+      beat.ibiRefPos    = 1;
+      beat.prevIbiValid = false;
+      beat.consecutiveRejects = 0;
+#if DEBUG_HRV
+      Serial.printf("[HRV-DBG] ibi %.1f ms rejected: reference not settled, restarting it\n", ibi);
+#endif
+      queueBeat(ibi, false, beatTimeMs);
+      return;
     }
   }
 
@@ -1117,9 +1154,24 @@ void updateMAX30102() {
 // GSR
 // ============================================================
 
+// GSR contact check. A reading pinned at either end of the 12-bit ADC
+// range means an open or shorted electrode circuit, not skin, and is sent
+// as null. The value with the electrodes off depends on the GSR module;
+// once measured on the bench, set GSR_OPEN_CIRCUIT_ADC to reject it too.
+#define GSR_ADC_MAX            4095
+#define GSR_RAIL_MARGIN        40
+#define GSR_OPEN_CIRCUIT_ADC   -1     // -1: not measured yet
+#define GSR_OPEN_CIRCUIT_BAND  30
+
 int readGSR() {
   // Raw ADC — no scaling.  Consistent with the old BLE sketch.
   return analogRead(GSR_PIN);
+}
+
+bool gsrLooksConnected(int raw) {
+  if (raw <= GSR_RAIL_MARGIN || raw >= GSR_ADC_MAX - GSR_RAIL_MARGIN) return false;
+  if (GSR_OPEN_CIRCUIT_ADC >= 0 && abs(raw - GSR_OPEN_CIRCUIT_ADC) <= GSR_OPEN_CIRCUIT_BAND) return false;
+  return true;
 }
 
 // ============================================================
@@ -1129,14 +1181,15 @@ int readGSR() {
 SensorReading readSensors() {
   SensorReading r = {};
 
-  if (mpuFound) {
-    readMPU6050(r.ax, r.ay, r.az, r.gx, r.gy, r.gz);
-  }
+  r.motionValid = mpuFound && readMPU6050(r.ax, r.ay, r.az, r.gx, r.gy, r.gz);
 
+  r.tempValid = temperatureValid();
   r.temp = lastValidTemperature;       // STTS22H — updated by updateTemperature()
   r.hr   = heartRateFromBeats();       // from clean beat intervals — -1 if none
   r.spo2 = (float)currentSpO2;        // MAX30102 — -1 if no finger
-  r.gsr  = (float)readGSR();
+  const int gsrRaw = readGSR();
+  r.gsr      = (float)gsrRaw;
+  r.gsrValid = gsrLooksConnected(gsrRaw);
   // Independent of hr: HRV comes from the beat detector, HR from the Maxim
   // routine, and one can be valid while the other is not.
   r.hrv  = fingerPresent ? computeRMSSD() : -1.0f;
@@ -1798,16 +1851,18 @@ void sendSensorPacket() {
   // lost millisecond precision after ~4.6 h of uptime.
   data["t"]       = (uint32_t)millis();
   data["boot"]    = bootId;
-  data["ax"]      = s.ax;
-  data["ay"]      = s.ay;
-  data["az"]      = s.az;
-  data["gx"]      = s.gx;
-  data["gy"]      = s.gy;
-  data["gz"]      = s.gz;
-  data["temp"]    = s.temp;
+  // A missing or invalid reading is sent as null, never as a stand-in.
+  if (s.motionValid) {
+    data["ax"] = s.ax;  data["ay"] = s.ay;  data["az"] = s.az;
+    data["gx"] = s.gx;  data["gy"] = s.gy;  data["gz"] = s.gz;
+  } else {
+    data["ax"] = nullptr;  data["ay"] = nullptr;  data["az"] = nullptr;
+    data["gx"] = nullptr;  data["gy"] = nullptr;  data["gz"] = nullptr;
+  }
+  if (s.tempValid) data["temp"] = s.temp; else data["temp"] = nullptr;
   data["hr"]      = s.hr;
   data["spo2"]    = s.spo2;
-  data["gsr"]     = s.gsr;
+  if (s.gsrValid) data["gsr"] = s.gsr; else data["gsr"] = nullptr;
   // On-band RMSSD, kept for comparison (stored as hrv_device); omitted
   // when there is not enough clean data. The server computes hrv itself.
   if (s.hrv >= 0.0f) data["hrv"] = s.hrv;
