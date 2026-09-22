@@ -1,7 +1,7 @@
 import { useTranslation } from 'react-i18next';
 
 interface StateSegment {
-  state: 'regulated' | 'amber' | 'dysregulated';
+  state: 'regulated' | 'amber' | 'dysregulated' | 'none'; // none = no state recorded
   durationSec: number;
 }
 
@@ -9,6 +9,7 @@ const STATE_COLORS: Record<string, string> = {
   regulated: '#E8F5F0',
   amber: '#FEF3E2',
   dysregulated: '#FCEEF0',
+  none: '#F4F4F7',
 };
 
 const STATE_DOT_COLORS: Record<string, string> = {
@@ -20,7 +21,7 @@ const STATE_DOT_COLORS: Record<string, string> = {
 export default function StateTimeline({ segments, totalSec }: { segments: StateSegment[]; totalSec: number }) {
   const { t } = useTranslation();
 
-  if (segments.length === 0 || totalSec <= 0) {
+  if (segments.every((s) => s.state === 'none') || totalSec <= 0) {
     return <p className="text-[13px] text-[#8E8EA0]">{t('no_state_data')}</p>;
   }
 
@@ -37,6 +38,7 @@ export default function StateTimeline({ segments, totalSec }: { segments: StateS
           if (pct < 0.5) return null;
           return (
             <div key={i} style={{ width: `${pct}%`, backgroundColor: STATE_COLORS[s.state] }}
+              title={s.state === 'none' ? t('child_state_none') : undefined}
               className="flex items-center justify-center transition-all" />
           );
         })}

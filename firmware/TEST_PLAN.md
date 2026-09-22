@@ -234,16 +234,26 @@ stalling and must be reported.
 
 ## S1. Child state, live (engine validation)
 
-Open the session page with `?debug=1` added to the URL. Under the
-therapist's state selector a **Band** line appears, and in debug mode a
-second line shows the provisional (not clinically validated) state, the
-score, each signal's points and deviation (z), the number of valid
-signals, the baseline length and the measured latency.
+Open the session page with `?debug=1` added to the URL. The header's
+Regulated / Amber / Dysregulated pills show the band engine's state
+automatically; nobody selects it. Under the pills a **Band** line shows
+the band's status, and in debug mode a second line shows the provisional
+(not clinically validated) state, the score, each signal's points and
+deviation (z), the number of valid signals, the baseline length and the
+measured latency.
 
-`CLINICAL_THRESHOLDS_SIGNED_OFF` is false, so the Band line itself only
-ever reads "learning this child's baseline", "not enough reliable
-signals", "live, state withheld until clinically validated" or "no live
-data". The debug line is what this test checks.
+`CLINICAL_THRESHOLDS_SIGNED_OFF` is false, so the engine never claims a
+state yet: **no pill is highlighted** (never a default "Regulated"), and
+the Band line only ever reads "learning this child's baseline", "not
+enough reliable signals", "live, state withheld until clinically
+validated" or "no live data". The debug line is what this test checks.
+
+Therapist override (check once): tap Amber. The pill highlights and the
+line reads "Set by therapist · HH:MM" with a **Back to auto** button.
+Refresh the page: the override is still there. Tap Back to auto: no pill
+is highlighted again. Both taps appear in `session_events` with
+`source = 'therapist'` (the second as `state_override_cleared`), and no
+`source = 'band'` rows appear until sign-off.
 
 Wear the band with the pulse sensor and the GSR electrodes on skin.
 

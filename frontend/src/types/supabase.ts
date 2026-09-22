@@ -1656,6 +1656,7 @@ export type Database = {
           recorded_by_user_id: string | null
           session_activity_id: string | null
           session_id: string
+          source: string
           state_value: string | null
         }
         Insert: {
@@ -1667,6 +1668,7 @@ export type Database = {
           recorded_by_user_id?: string | null
           session_activity_id?: string | null
           session_id: string
+          source?: string
           state_value?: string | null
         }
         Update: {
@@ -1678,6 +1680,7 @@ export type Database = {
           recorded_by_user_id?: string | null
           session_activity_id?: string | null
           session_id?: string
+          source?: string
           state_value?: string | null
         }
         Relationships: [

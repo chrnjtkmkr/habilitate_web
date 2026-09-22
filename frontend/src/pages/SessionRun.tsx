@@ -34,6 +34,14 @@ import {
 } from '../lib/bandStore';
 import { useChildState } from '../hooks/useChildState';
 import BandStateIndicator from '../components/session/BandStateIndicator';
+import { CLINICAL_THRESHOLDS_SIGNED_OFF } from '../lib/childState/engine';
+import {
+  bandClaim,
+  displayedChildState,
+  overrideFromEvents,
+  type ClaimState,
+  type StateOverride,
+} from '../lib/childState/header';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import Pill from '../components/Pill';
@@ -44,7 +52,7 @@ import type { RecommendedActivity } from '../lib/planRecommender/types';
 
 type TrialResponse = Database['public']['Enums']['trial_response'];
 
-type ChildState = 'regulated' | 'amber' | 'dysregulated';
+type ChildState = ClaimState;
 
 const CHILD_STATES: { value: ChildState; i18nKey: string; captionKey: string; descKey: string; seeKey: string }[] = [
   { value: 'regulated', i18nKey: 'child_state_regulated', captionKey: 'child_state_caption_regulated', descKey: 'child_state_regulated_desc', seeKey: 'child_state_regulated_see' },
@@ -96,6 +104,7 @@ export default function SessionRun() {
     [childDob],
   );
   const liveChildState = useChildState(liveBandId, childAgeYears);
+  const liveBandClaim = bandClaim(liveChildState.result?.state, liveChildState.stale);
   const { data: sessionActivities } = useSessionActivities(sessionId);
   const { data: activeGoals } = useActiveGoals(session?.child?.id);
   // Fetch existing trials for resume after refresh
@@ -201,8 +210,9 @@ export default function SessionRun() {
   );
   const { data: activityLookup = {} } = useActivityLookup(planActivityIds);
 
-  // Therapist inputs
-  const [childState, setChildState] = useState<ChildState>('regulated');
+  // Therapist inputs. The header shows the band engine's state unless the
+  // therapist overrides it; an override stays until "Back to auto".
+  const [stateOverride, setStateOverride] = useState<StateOverride | null>(null);
   const [spontPulse, setSpontPulse] = useState(false);
   const [spontMoments, setSpontMoments] = useState<number[]>([]);
   const [spontSuggestPulse, setSpontSuggestPulse] = useState(false);
@@ -260,6 +270,20 @@ export default function SessionRun() {
 
     // Schedule outside synchronous effect to satisfy lint rule
     queueMicrotask(() => applyResume(resumeIndex, responses));
+
+    // Restore a therapist override that was in force before the refresh.
+    let cancelled = false;
+    supabase
+      .from('session_events')
+      .select('event_type, state_value, recorded_at, source')
+      .eq('session_id', sessionId!)
+      .eq('source', 'therapist')
+      .in('event_type', ['state_change', 'state_override_cleared'])
+      .order('recorded_at')
+      .then(({ data }) => {
+        if (!cancelled && data) setStateOverride(overrideFromEvents(data));
+      });
+    return () => { cancelled = true; };
   }, [phase, session, sessionActivities, existingTrials, sessionId, navigate, applyResume]);
 
   // Keep cvMetrics ref in sync for use in event handlers with stale closures
@@ -454,26 +478,32 @@ export default function SessionRun() {
         await startActivityMut.mutateAsync({ sessionActivityId: newActivities[0].id });
       }
       setPhase('live');
-      // Record initial child state
-      createSessionEvent.mutate({
-        sessionId,
-        eventType: 'state_change',
-        stateValue: 'regulated',
-        recordedByUserId: user.id,
-      });
     } catch {
       toast(t('error_generic'), 'error');
     }
   }
 
   function handleChildStateChange(newState: ChildState) {
-    if (isPaused || newState === childState || !sessionId || !user) return;
-    setChildState(newState);
+    if (isPaused || newState === stateOverride?.state || !sessionId || !user) return;
+    setStateOverride({ state: newState, at: new Date().getTime() });
     createSessionEvent.mutate({
       sessionId,
       sessionActivityId: currentActivity?.id ?? null,
       eventType: 'state_change',
       stateValue: newState,
+      source: 'therapist',
+      recordedByUserId: user.id,
+    });
+  }
+
+  function handleBackToAuto() {
+    if (isPaused || !stateOverride || !sessionId || !user) return;
+    setStateOverride(null);
+    createSessionEvent.mutate({
+      sessionId,
+      sessionActivityId: currentActivity?.id ?? null,
+      eventType: 'state_override_cleared',
+      source: 'therapist',
       recordedByUserId: user.id,
     });
   }
@@ -524,6 +554,28 @@ export default function SessionRun() {
   const currentActivity = sessionActivities && sessionActivities.length > 0
     ? (sessionActivities[currentActivityIndex] ?? null)
     : null;
+
+  // Record the band's own state changes (source 'band') so the report can
+  // show the band line next to the therapist's. Dormant until thresholds
+  // are clinically signed off: before that the engine never claims a state.
+  // A null value marks the band losing its state (a gap in its line).
+  const recordSessionEvent = createSessionEvent.mutate;
+  const currentActivityId = currentActivity?.id ?? null;
+  const lastRecordedBandClaimRef = useRef<ClaimState | null>(null);
+  useEffect(() => {
+    if (!CLINICAL_THRESHOLDS_SIGNED_OFF) return;
+    if (phase !== 'live' || isPaused || !sessionId || !user) return;
+    if (liveBandClaim === lastRecordedBandClaimRef.current) return;
+    lastRecordedBandClaimRef.current = liveBandClaim;
+    recordSessionEvent({
+      sessionId,
+      sessionActivityId: currentActivityId,
+      eventType: 'state_change',
+      stateValue: liveBandClaim,
+      source: 'band',
+      recordedByUserId: user.id,
+    });
+  }, [liveBandClaim, phase, isPaused, sessionId, user, currentActivityId, recordSessionEvent]);
 
   function getCurrentActivityResponse(): TrialResponse | null {
     if (!currentActivity) return null;
@@ -1135,6 +1187,7 @@ export default function SessionRun() {
     : displayMetrics?.face_state === 'looking_away' || displayMetrics?.face_state === 'head_down' ? '#D97706'
     : '#9C9C95';
 
+  const childState = displayedChildState(stateOverride, liveBandClaim);
   const pillStyle: Record<ChildState, { bg: string; color: string; dot: string }> = {
     regulated: { bg: '#E8F5F0', color: '#1A6B4F', dot: '#4ADE80' },
     amber: { bg: '#FEF3E2', color: '#92600A', dot: '#FBBF24' },
@@ -1188,10 +1241,13 @@ export default function SessionRun() {
             </button>
           </div>
           {/* Micro-caption — hidden on short viewports to save space */}
-          <span className="hidden text-[11px] mt-1 sm:inline" style={{ color: '#8E8EA0', fontWeight: 500 }}>
-            {t(CHILD_STATES.find((cs) => cs.value === childState)?.captionKey ?? 'child_state_caption_regulated')}
-          </span>
-          {liveBandId && <BandStateIndicator live={liveChildState} debug={isDebugMode} />}
+          {childState && (
+            <span className="hidden text-[11px] mt-1 sm:inline" style={{ color: '#8E8EA0', fontWeight: 500 }}>
+              {t(CHILD_STATES.find((cs) => cs.value === childState)?.captionKey ?? 'child_state_caption_regulated')}
+            </span>
+          )}
+          <BandStateIndicator live={liveBandId ? liveChildState : null} debug={isDebugMode}
+            override={stateOverride} onBackToAuto={handleBackToAuto} disabled={isPaused} />
 
           {/* Info popover */}
           {showChildStateInfo && (<>

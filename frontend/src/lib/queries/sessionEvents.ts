@@ -23,8 +23,10 @@ export function useCreateSessionEvent() {
     mutationFn: async (params: {
       sessionId: string;
       sessionActivityId?: string | null;
-      eventType: 'spontaneous_initiation' | 'state_change';
+      eventType: 'spontaneous_initiation' | 'state_change' | 'state_override_cleared';
       stateValue?: string | null;
+      /** 'band' = the child-state engine's own state change. Default 'therapist'. */
+      source?: 'therapist' | 'band';
       note?: string | null;
       recordedByUserId?: string;
     }) => {
@@ -38,6 +40,7 @@ export function useCreateSessionEvent() {
           note: params.note ?? null,
           recorded_at: new Date().toISOString(),
           recorded_by_user_id: params.recordedByUserId ?? null,
+          source: params.source ?? 'therapist',
         })
         .select('id')
         .maybeSingle();
