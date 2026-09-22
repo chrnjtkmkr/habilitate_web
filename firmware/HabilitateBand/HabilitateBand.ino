@@ -63,8 +63,9 @@
 #include <WiFi.h>
 #include <Preferences.h>
 #include <WebSocketsClient.h>
-#include <Adafruit_NeoPixel.h>
 #include <esp_mac.h>
+#include <esp_task_wdt.h>
+#include <esp_attr.h>
 
 // Disable unused features to save flash space
 #define ARDUINOJSON_USE_LONG_LONG 0
@@ -80,7 +81,11 @@
 // CONFIGURATION — edit these
 // ============================================================
 
-#define FIRMWARE_VERSION "0.4.5"
+#define FIRMWARE_VERSION "0.4.6"
+
+// Beat-detector trace (~3 lines/s plus one per beat). Keep 0 in normal
+// use: at that rate it pushes crash output out of the serial monitor.
+#define DEBUG_HRV 0
 
 // Per-band identity (BAND_ID + DEVICE_TOKEN) comes from secrets.h
 // (gitignored). Every physical band needs its own values; see
@@ -105,6 +110,33 @@
 // flashed with the same BAND_ID show up as one ID with two MACs.
 // Filled in by readChipMac() in setup().
 char chipMac[18] = "00:00:00:00:00:00";
+
+// ---- Crash breadcrumbs ----
+// Kept in RTC memory that is not cleared by a panic, watchdog or
+// software reset (only by power-on). loop() records its uptime and the
+// section it is in; the next boot prints where the previous one died,
+// so a crash can be diagnosed without catching it on the serial monitor.
+enum class LoopStep : uint8_t {
+  Boot, Sensors, Led, Scan, Provisioning, Network, WsLoop, Send, Idle,
+};
+
+struct CrashCrumbs {
+  uint32_t magic;
+  uint32_t bootCount;   // boots since the last power-on
+  uint32_t uptimeS;
+  uint8_t  step;        // LoopStep
+  uint8_t  netState;    // NetState
+};
+
+#define CRUMB_MAGIC 0x48414231u  // "HAB1"
+RTC_NOINIT_ATTR CrashCrumbs crumbs;
+CrashCrumbs previousBoot     = {};
+bool        previousBootSeen = false;
+
+// A hang anywhere in setup() or loop() panics after this long and the
+// band restarts, instead of freezing (it once sat frozen for 11 min).
+// Longer than the slowest blocking call, a TLS handshake on a poor link.
+#define LOOP_WDT_TIMEOUT_MS 20000
 
 // Supabase WebSocket endpoint
 #define WS_HOST  "sqjuracvmmuyrdcapehk.functions.supabase.co"
@@ -150,12 +182,12 @@ char chipMac[18] = "00:00:00:00:00:00";
 #define GSR_PIN  1
 
 // ============================================================
-// LED (single onboard WS2812, driven by Adafruit_NeoPixel)
+// LED (single onboard WS2812, driven through the core's RMT API)
 // ============================================================
 // Orange (#FF5A00) → connectivity state
 // Purple (#7B2FFF) → therapy session state
 //
-// Colours are full scale; pixel.setBrightness(LED_MAX_DUTY) caps
+// Colours are full scale; ledSetRGB() scales them by LED_MAX_DUTY, which caps
 // the output to save battery while keeping the LED visible.
 // ============================================================
 // The LED pin comes from the board selected in the Arduino IDE
@@ -169,9 +201,11 @@ char chipMac[18] = "00:00:00:00:00:00";
     #define LED_PIN 48
   #endif
 #endif
-#define LED_COUNT       1
-
 #define LED_MAX_DUTY      48      // 0-255; ~19% duty: visible while still battery-conscious
+
+// A frame takes ~30 us; anything slower means the RMT peripheral is
+// stuck, and the write is abandoned rather than blocking the band.
+#define LED_WRITE_TIMEOUT_MS 10
 
 #define ORANGE_R  255
 #define ORANGE_G   90
@@ -207,7 +241,6 @@ BLECharacteristic*   pWifiScanRequestChar = nullptr;
 BLECharacteristic*   pWifiScanResultChar  = nullptr;
 BLECharacteristic*   pSessionStateChar    = nullptr;
 
-Adafruit_NeoPixel pixel(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 // --- BLE → loop() handoff ---
 // BLE callbacks run on the Bluetooth task, not the loop() task. They
@@ -289,21 +322,55 @@ struct SensorReading {
 // LED HELPERS
 // ============================================================
 
-// updateLED() runs every loop iteration and show() is not free, so the
-// LED is written when the colour changes, plus once a second so a
-// single corrupted frame can never leave it stuck wrong or dark.
+// The Adafruit NeoPixel driver was replaced: every show() ended in an
+// RMT write with no timeout, and it could return from a failed RMT init
+// still holding its internal mutex. A status LED must never be able to
+// block the band, so frames are sent here with LED_WRITE_TIMEOUT_MS.
+bool     ledReady         = false;
+uint32_t ledWriteFailures = 0;
+
+void ledInit() {
+  // 10 MHz: one tick = 100 ns, matching the WS2812 timing below.
+  ledReady = rmtInit(LED_PIN, RMT_TX_MODE, RMT_MEM_NUM_BLOCKS_1, 10000000);
+  if (!ledReady) Serial.printf("[LED] RMT init failed on GPIO %d; LED disabled\n", LED_PIN);
+}
+
+void ledWriteFrame(uint8_t r, uint8_t g, uint8_t b) {
+  if (!ledReady) return;
+
+  // WS2812 takes GRB, MSB first. 0 bit: 400 ns high, 800 ns low;
+  // 1 bit: 800 ns high, 400 ns low.
+  const uint8_t bytes[3] = {g, r, b};
+  rmt_data_t symbols[24];
+  for (int i = 0; i < 24; i++) {
+    const bool one = bytes[i / 8] & (0x80 >> (i % 8));
+    symbols[i].level0    = 1;
+    symbols[i].duration0 = one ? 8 : 4;
+    symbols[i].level1    = 0;
+    symbols[i].duration1 = one ? 4 : 8;
+  }
+
+  if (!rmtWrite(LED_PIN, symbols, 24, LED_WRITE_TIMEOUT_MS)) {
+    if (ledWriteFailures++ == 0) Serial.println("[LED] Write timed out; continuing without it");
+  }
+}
+
+// updateLED() runs every loop iteration, so the LED is written when the
+// colour changes, plus once a second so a single corrupted frame can
+// never leave it stuck wrong or dark.
 #define LED_REFRESH_MS 1000
 
 void ledSetRGB(uint8_t r, uint8_t g, uint8_t b) {
   static uint32_t      shown       = 0xFFFFFFFF;  // forces the first write
   static unsigned long lastWriteMs = 0;
-  const uint32_t colour = pixel.Color(r, g, b);
+  const uint32_t colour = ((uint32_t)r << 16) | ((uint32_t)g << 8) | b;
   const unsigned long now = millis();
   if (colour == shown && now - lastWriteMs < LED_REFRESH_MS) return;
   shown       = colour;
   lastWriteMs = now;
-  pixel.setPixelColor(0, colour);
-  pixel.show();
+  ledWriteFrame((uint16_t)r * LED_MAX_DUTY / 255,
+                (uint16_t)g * LED_MAX_DUTY / 255,
+                (uint16_t)b * LED_MAX_DUTY / 255);
 }
 
 void ledOff() {
@@ -631,7 +698,7 @@ void detectPulsePeak(float irFiltered, unsigned long nowMs) {
   bool isLocalMax = (prevAC1 > prevAC2) && (prevAC1 > ac);
   bool isBigEnough = prevAC1 > (acEnvelope * PEAK_THRESHOLD_FRAC);
 
-  // ---- TEMP DEBUG: print every ~300ms ----
+#if DEBUG_HRV
   static unsigned long lastDebugMs = 0;
   if (nowMs - lastDebugMs >= 300) {
     lastDebugMs = nowMs;
@@ -639,12 +706,14 @@ void detectPulsePeak(float irFiltered, unsigned long nowMs) {
                   ac, prevAC1, acEnvelope, acEnvelope * PEAK_THRESHOLD_FRAC,
                   isLocalMax, isBigEnough, ibiCount);
   }
-  // ---- END TEMP DEBUG ----
+#endif
 
   if (isLocalMax && isBigEnough) {
     if (lastPeakMs > 0) {
       unsigned long ibi = nowMs - lastPeakMs;
+#if DEBUG_HRV
       Serial.printf("[HRV-DBG] PEAK FOUND: ibi=%lu ms (valid range %d-%d)\n", ibi, MIN_IBI_MS, MAX_IBI_MS);
+#endif
       if (ibi >= MIN_IBI_MS && ibi <= MAX_IBI_MS) {
         if (ibiCount >= IBI_HISTORY_SIZE) {
           for (int i = 0; i < IBI_HISTORY_SIZE - 1; i++) {
@@ -1057,30 +1126,27 @@ class WifiScanRequestCallback : public BLECharacteristicCallbacks {
 // Session state is controlled explicitly by the dashboard over BLE.
 // Wi-Fi and WebSocket events never change it.
 
+// The dashboard re-sends the current state every few seconds while a
+// session is live (the band forgets it on reboot), so only changes are
+// logged.
+void setSessionState(bool active, bool paused, const char* name) {
+  if (sessionActive == active && sessionPaused == paused) return;
+  sessionActive = active;
+  sessionPaused = paused;
+  Serial.printf("[SESSION] %s\n", name);
+}
+
 void applySessionState(const String& command) {
   String state = command;
   state.trim();
   state.toUpperCase();
 
   if (state == "ACTIVE" || state == "RESUME" || state == "RESUMED") {
-    sessionActive = true;
-    sessionPaused = false;
-    Serial.println("[SESSION] ACTIVE");
-    return;
-  }
-
-  if (state == "PAUSE" || state == "PAUSED") {
-    sessionActive = false;
-    sessionPaused = true;
-    Serial.println("[SESSION] PAUSED");
-    return;
-  }
-
-  if (state == "STOP" || state == "STOPPED" || state == "IDLE") {
-    sessionActive = false;
-    sessionPaused = false;
-    Serial.println("[SESSION] STOPPED");
-    return;
+    setSessionState(true, false, "ACTIVE");
+  } else if (state == "PAUSE" || state == "PAUSED") {
+    setSessionState(false, true, "PAUSED");
+  } else if (state == "STOP" || state == "STOPPED" || state == "IDLE") {
+    setSessionState(false, false, "STOPPED");
   }
 }
 
@@ -1126,6 +1192,11 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t /*length*/) {
       hello["mac"] = chipMac;
       hello["reset"] = resetReasonName();
       hello["uptime_ms"] = millis();
+      hello["boot_count"] = crumbs.bootCount;
+      if (previousBootSeen) {
+        hello["prev_uptime_s"] = previousBoot.uptimeS;
+        hello["prev_step"]     = loopStepName(previousBoot.step);
+      }
       String helloJson;
       serializeJson(hello, helloJson);
       wsClient.sendTXT(helloJson);
@@ -1368,7 +1439,9 @@ void serviceNetwork(unsigned long now) {
         break;
       }
 
+      crumb(LoopStep::WsLoop);
       wsClient.loop();
+      crumb(LoopStep::Network);
 
       if (wsConnected && wsAuthenticated) {
         if (netState != NetState::Online) {
@@ -1561,8 +1634,7 @@ void setupBLE() {
 // the state logic: check LED_PIN against the board, and on some clones
 // the RGB solder jumper must be closed.
 void setupLED() {
-  pixel.begin();
-  pixel.setBrightness(LED_MAX_DUTY);
+  ledInit();
   Serial.printf("[LED] Self-test on GPIO %d: red, green, blue\n", LED_PIN);
   const uint8_t steps[3][3] = {{255, 0, 0}, {0, 255, 0}, {0, 0, 255}};
   for (const auto& c : steps) {
@@ -1600,6 +1672,56 @@ const char* resetReasonName() {
   }
 }
 
+const char* loopStepName(uint8_t step) {
+  switch (static_cast<LoopStep>(step)) {
+    case LoopStep::Boot:         return "setup";
+    case LoopStep::Sensors:      return "sensors";
+    case LoopStep::Led:          return "led";
+    case LoopStep::Scan:         return "wifi-scan";
+    case LoopStep::Provisioning: return "provisioning";
+    case LoopStep::Network:      return "network";
+    case LoopStep::WsLoop:       return "websocket";
+    case LoopStep::Send:         return "send";
+    case LoopStep::Idle:         return "idle";
+    default:                     return "unknown";
+  }
+}
+
+const char* netStateName(uint8_t state) {
+  switch (static_cast<NetState>(state)) {
+    case NetState::NoCredentials:   return "NoCredentials";
+    case NetState::WifiConnecting:  return "WifiConnecting";
+    case NetState::WifiBackoff:     return "WifiBackoff";
+    case NetState::CloudConnecting: return "CloudConnecting";
+    case NetState::Online:          return "Online";
+    default:                        return "unknown";
+  }
+}
+
+inline void crumb(LoopStep step) {
+  crumbs.step = static_cast<uint8_t>(step);
+}
+
+// Saves what the previous boot left behind, then starts this boot's record.
+void startCrashCrumbs() {
+  previousBootSeen = (crumbs.magic == CRUMB_MAGIC);
+  if (previousBootSeen) previousBoot = crumbs;
+  crumbs.magic     = CRUMB_MAGIC;
+  crumbs.bootCount = previousBootSeen ? previousBoot.bootCount + 1 : 1;
+  crumbs.uptimeS   = 0;
+  crumbs.step      = static_cast<uint8_t>(LoopStep::Boot);
+  crumbs.netState  = 0;
+}
+
+void startLoopWatchdog() {
+  esp_task_wdt_config_t config = {};
+  config.timeout_ms     = LOOP_WDT_TIMEOUT_MS;
+  config.idle_core_mask = 1 << 0;  // keep the core's default idle check
+  config.trigger_panic  = true;    // panic prints a backtrace, then restarts
+  esp_task_wdt_reconfigure(&config);
+  enableLoopWDT();  // the core resets it after every loop() iteration
+}
+
 void readChipMac() {
   uint8_t mac[6];
   if (esp_efuse_mac_get_default(mac) != ESP_OK) return;
@@ -1616,6 +1738,8 @@ void setup() {
   delay(500);
   Serial.println("[BOOT] HabilitateBand starting");
   readChipMac();
+  startCrashCrumbs();
+  startLoopWatchdog();
 
   // LED — initialise first so the user gets visual feedback immediately
   setupLED();
@@ -1661,6 +1785,13 @@ void setup() {
 
   Serial.printf("[BOOT] %s firmware %s mac %s\n", BAND_ID, FIRMWARE_VERSION, chipMac);
   Serial.printf("[BOOT] Reset reason: %s\n", resetReasonName());
+  if (previousBootSeen) {
+    Serial.printf("[BOOT] Previous boot: ran %lu s, last step %s, network %s (boot #%lu since power-on)\n",
+                  (unsigned long)previousBoot.uptimeS, loopStepName(previousBoot.step),
+                  netStateName(previousBoot.netState), (unsigned long)crumbs.bootCount);
+  } else {
+    Serial.println("[BOOT] Previous boot: no record (first boot after power-on)");
+  }
   Serial.printf("[BOOT] Sensors MPU=%s STTS22H=%s MAX30102=%s\n",
                 mpuFound ? "OK" : "MISSING",
                 sttsFound ? "OK" : "MISSING",
@@ -1674,12 +1805,16 @@ void setup() {
 
 void loop() {
   unsigned long now = millis();
+  crumbs.uptimeS  = now / 1000;
+  crumbs.netState = static_cast<uint8_t>(netState);
 
   // ── High-frequency sensor servicing ───────────────────────
+  crumb(LoopStep::Sensors);
   updateMAX30102();   // drains FIFO, runs analysis when window is full
   updateTemperature(); // polls STTS22H at TEMP_POLL_MS interval
 
   // ── LED state machine ──────────────────────────────────────
+  crumb(LoopStep::Led);
   updateLED();
 
   // ── BLE housekeeping ───────────────────────────────────────
@@ -1692,22 +1827,28 @@ void loop() {
   // Order matters. A scan that just finished releases the radio first;
   // new credentials are then applied before the state machine runs, so
   // an old retry or timeout can never act on (or report against) them.
+  crumb(LoopStep::Scan);
   serviceWifiScan(now);
+  crumb(LoopStep::Provisioning);
   serviceProvisioning(now);
 
   if (wifiScanRequested) {
     wifiScanRequested = false;
+    crumb(LoopStep::Scan);
     startWifiScan(now);
   }
 
+  crumb(LoopStep::Network);
   serviceNetwork(now);
 
   // ── Telemetry ──────────────────────────────────────────────
   if (netState == NetState::Online && now - lastSensorSend >= SENSOR_INTERVAL_MS) {
     lastSensorSend = now;
+    crumb(LoopStep::Send);
     sendSensorPacket();
   }
 
   // ── Watchdog-safe yield ────────────────────────────────────
+  crumb(LoopStep::Idle);
   delay(1);
 }

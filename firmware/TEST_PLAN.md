@@ -9,9 +9,20 @@ lines.
 Every recorded run must include the identity line printed at boot:
 
 ```
-[BOOT] HAB-001 firmware 0.4.5 mac 24:58:7C:XX:XX:XX
+[BOOT] HAB-001 firmware 0.4.6 mac 24:58:7C:XX:XX:XX
 [BOOT] Reset reason: POWERON
+[BOOT] Previous boot: no record (first boot after power-on)
 ```
+
+After any restart that was not a power cycle, the third line instead
+reads e.g. `Previous boot: ran 289 s, last step websocket, network
+Online (boot #3 since power-on)`. It records where the band was when it
+died, so a crash can be diagnosed from the next boot even if the crash
+itself scrolled away. Always copy all three lines.
+
+A hang anywhere in the firmware now triggers the watchdog within 20 s:
+the log shows `task_wdt` and a backtrace, and the band restarts with
+reset reason `TASK_WDT`. Copy the backtrace block if you see one.
 
 Reset reason `POWERON`, `USB` or `EXTERNAL_PIN` is expected after a power
 cycle, a flash or the reset button. `PANIC`, anything ending in `_WDT`,
@@ -65,8 +76,11 @@ phone hotspot and the office Wi-Fi), plus one wrong password.
    **LED:** orange blinking while connecting, orange solid at `CONNECTED`.
 2. Confirm data is flowing: `[WS] Sent seq ...` lines appear, and new
    `device_telemetry` rows arrive for this band.
-3. Start a session from the dashboard. **LED:** purple solid. Pause it:
-   purple blinking. Resume: purple solid. End it: back to orange solid.
+3. Start a session from the dashboard. **LED:** purple solid within
+   10 s. Pause it: purple blinking. Resume: purple solid. End it: back to
+   orange solid. The session header must not show "Band not receiving
+   session state"; if it does, copy the browser console lines starting
+   with `[Wearable]`.
 4. Without unplugging the band, click **Change Wi-Fi network**, scan,
    pick **B**, enter its password and connect.
 5. Expect in the log, in order:
@@ -149,3 +163,8 @@ alternates purple/orange until `CONNECTED` returns (normally under
 or leave the LED off, orange, or purple-blinking; before 0.4.0 every
 drop reset the session LED. Record the number and length of the
 alternating episodes: they should match the `[WS] Disconnected` count.
+
+If the band restarts during the soak, that is a failure to report (copy
+the three `[BOOT]` lines and any backtrace), but the session must
+recover on its own: the dashboard re-sends the session state every 10 s,
+so the LED returns to purple solid within about 20 s of the reboot.
