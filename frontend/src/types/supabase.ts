@@ -9,6 +9,197 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      band_seconds: {
+        Row: {
+          id: number
+          band_id: string
+          boot_id: number
+          device_second: number
+          second_at: string
+          packets: number
+          gsr: number | null
+          temp: number | null
+          motion_energy: number | null
+          hr: number | null
+          hrv: number | null
+          gyro_sd: number | null
+          flap_hz: number | null
+          flapping: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: never
+          band_id: string
+          boot_id: number
+          device_second: number
+          second_at: string
+          packets: number
+          gsr?: number | null
+          temp?: number | null
+          motion_energy?: number | null
+          hr?: number | null
+          hrv?: number | null
+          gyro_sd?: number | null
+          flap_hz?: number | null
+          flapping?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: never
+          band_id?: string
+          boot_id?: number
+          device_second?: number
+          second_at?: string
+          packets?: number
+          gsr?: number | null
+          temp?: number | null
+          motion_energy?: number | null
+          hr?: number | null
+          hrv?: number | null
+          gyro_sd?: number | null
+          flap_hz?: number | null
+          flapping?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
+      device_beats: {
+        Row: {
+          id: number
+          band_id: string
+          boot_id: number
+          chain: number
+          beat_seq: number
+          t_ms: number
+          ibi_ms: number
+          clean: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: never
+          band_id: string
+          boot_id: number
+          chain: number
+          beat_seq: number
+          t_ms: number
+          ibi_ms: number
+          clean: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: never
+          band_id?: string
+          boot_id?: number
+          chain?: number
+          beat_seq?: number
+          t_ms?: number
+          ibi_ms?: number
+          clean?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
+      device_telemetry: {
+        Row: {
+          id: string
+          band_id: string
+          seq: number
+          t: number
+          ax: number
+          ay: number
+          az: number
+          gx: number
+          gy: number
+          gz: number
+          temp: number
+          hr: number | null
+          hrv: number | null
+          spo2: number | null
+          gsr: number
+          // Generated: sqrt(ax^2 + ay^2 + az^2), in g, ~1.0 at rest.
+          motion: number
+          created_at: string
+          boot_id: number | null
+          hrv_device: number | null
+          sample_at: string | null
+        }
+        Insert: {
+          id?: string
+          band_id: string
+          seq: number
+          t: number
+          ax: number
+          ay: number
+          az: number
+          gx: number
+          gy: number
+          gz: number
+          temp: number
+          hr?: number | null
+          hrv?: number | null
+          spo2?: number | null
+          gsr: number
+          created_at?: string
+          boot_id?: number | null
+          hrv_device?: number | null
+          sample_at?: string | null
+        }
+        Update: {
+          id?: string
+          band_id?: string
+          seq?: number
+          t?: number
+          ax?: number
+          ay?: number
+          az?: number
+          gx?: number
+          gy?: number
+          gz?: number
+          temp?: number
+          hr?: number | null
+          hrv?: number | null
+          spo2?: number | null
+          gsr?: number
+          created_at?: string
+          boot_id?: number | null
+          hrv_device?: number | null
+          sample_at?: string | null
+        }
+        Relationships: []
+      }
+      wearable_metrics: {
+        Row: {
+          id: string
+          telemetry_id: string
+          band_id: string
+          seq: number
+          acceleration_magnitude: number
+          rotation_magnitude: number
+          movement_index: number
+          created_at: string
+        }
+        Insert: {
+          id?: string
+          telemetry_id: string
+          band_id: string
+          seq: number
+          acceleration_magnitude: number
+          rotation_magnitude: number
+          movement_index: number
+          created_at?: string
+        }
+        Update: {
+          id?: string
+          telemetry_id?: string
+          band_id?: string
+          seq?: number
+          acceleration_magnitude?: number
+          rotation_magnitude?: number
+          movement_index?: number
+          created_at?: string
+        }
+        Relationships: []
+      }
       activities: {
         Row: {
           center_id: string | null
@@ -1465,6 +1656,7 @@ export type Database = {
           recorded_by_user_id: string | null
           session_activity_id: string | null
           session_id: string
+          source: string
           state_value: string | null
         }
         Insert: {
@@ -1476,6 +1668,7 @@ export type Database = {
           recorded_by_user_id?: string | null
           session_activity_id?: string | null
           session_id: string
+          source?: string
           state_value?: string | null
         }
         Update: {
@@ -1487,6 +1680,7 @@ export type Database = {
           recorded_by_user_id?: string | null
           session_activity_id?: string | null
           session_id?: string
+          source?: string
           state_value?: string | null
         }
         Relationships: [

@@ -15,6 +15,7 @@ import Skeleton from '../components/Skeleton';
 import EngagementTrace from '../components/charts/EngagementTrace';
 import ActivityBarChart from '../components/charts/ActivityBarChart';
 import StateTimeline from '../components/charts/StateTimeline';
+import { stateRegions as stateRegionsFor, timelineSegments } from '../lib/childState/header';
 import TrialDonut from '../components/charts/TrialDonut';
 import VoiceDiarizationCard from '../components/charts/VoiceDiarizationCard';
 import PromptLevelCard from '../components/charts/PromptLevelCard';
@@ -126,32 +127,29 @@ export default function SessionSummary() {
       }));
   }, [sessionActivities, sessionStartMs]);
 
-  // State change events → regions
-  const stateRegions = useMemo(() => {
-    if (!sessionStartMs) return [];
-    const stateChanges = events
-      .filter((e) => e.event_type === 'state_change' && e.state_value)
-      .map((e) => ({
-        timeSec: (new Date(e.recorded_at).getTime() - sessionStartMs) / 1000,
-        state: e.state_value as 'regulated' | 'amber' | 'dysregulated',
-      }));
-    if (stateChanges.length === 0) return [];
-
-    const regions: { startSec: number; endSec: number; state: 'regulated' | 'amber' | 'dysregulated' }[] = [];
-    for (let i = 0; i < stateChanges.length; i++) {
-      const endSec = i < stateChanges.length - 1 ? stateChanges[i + 1].timeSec : durationSec;
-      regions.push({ startSec: stateChanges[i].timeSec, endSec, state: stateChanges[i].state });
-    }
-    return regions;
-  }, [events, sessionStartMs, durationSec]);
+  // State change events → regions. Therapist entries (with gaps after
+  // "back to auto") drive the engagement chart shading; the band's own
+  // line is shown beside them in the timeline when it recorded any.
+  // Unvalidated band estimates (source 'band_estimate') are never shown.
+  const stateRegions = useMemo(
+    () => (sessionStartMs ? stateRegionsFor(events, 'therapist', sessionStartMs, durationSec) : []),
+    [events, sessionStartMs, durationSec],
+  );
+  const bandStateRegions = useMemo(
+    () => (sessionStartMs ? stateRegionsFor(events, 'band', sessionStartMs, durationSec) : []),
+    [events, sessionStartMs, durationSec],
+  );
+  const hasBandStateEvents = events.some((e) => e.event_type === 'state_change' && e.source === 'band');
 
   // State timeline segments
-  const stateSegments = useMemo(() => {
-    return stateRegions.map((r) => ({
-      state: r.state,
-      durationSec: r.endSec - r.startSec,
-    }));
-  }, [stateRegions]);
+  const stateSegments = useMemo(
+    () => (stateRegions.length ? timelineSegments(stateRegions, durationSec) : []),
+    [stateRegions, durationSec],
+  );
+  const bandStateSegments = useMemo(
+    () => timelineSegments(bandStateRegions, durationSec),
+    [bandStateRegions, durationSec],
+  );
 
   // Spontaneous dots
   const spontaneousDots = useMemo(() => {
@@ -229,7 +227,7 @@ export default function SessionSummary() {
     const best = sorted[0];
     const worst = sorted[sorted.length - 1];
     const spontCount = spontaneousDots.length;
-    const stateCount = events.filter((e) => e.event_type === 'state_change').length;
+    const stateCount = events.filter((e) => e.event_type === 'state_change' && (e.source ?? 'therapist') === 'therapist').length;
 
     let text = `${session?.child?.full_name ?? 'Child'} was most engaged during ${best.name} (${best.engagement.toFixed(0)}%)`;
     if (sorted.length > 1 && worst.name !== best.name) {
@@ -436,7 +434,20 @@ export default function SessionSummary() {
           </div>
           <div className="p-4" style={S.card}>
             <p style={S.label} className="mb-3">{t('child_state_timeline_label')}</p>
-            <StateTimeline segments={stateSegments} totalSec={durationSec} />
+            {hasBandStateEvents ? (
+              <div className="flex flex-col gap-4">
+                <div>
+                  <p className="text-[12px] font-medium mb-1.5" style={{ color: '#8E8EA0' }}>{t('child_state_timeline_therapist')}</p>
+                  <StateTimeline segments={stateSegments} totalSec={durationSec} />
+                </div>
+                <div>
+                  <p className="text-[12px] font-medium mb-1.5" style={{ color: '#8E8EA0' }}>{t('child_state_timeline_band')}</p>
+                  <StateTimeline segments={bandStateSegments} totalSec={durationSec} />
+                </div>
+              </div>
+            ) : (
+              <StateTimeline segments={stateSegments} totalSec={durationSec} />
+            )}
           </div>
         </div>
 

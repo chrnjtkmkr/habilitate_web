@@ -25,6 +25,24 @@ import { domainI18nKeys } from '../lib/domainLabels';
 import { getDomainIcon, getSimplifiedGoal, getHelpLadder, pickField, pickArrayField, formatAgeRange } from '../lib/activity/content';
 import { useActivityLookup } from '../lib/queries/activities';
 import ActivityPicker from '../components/ActivityPicker';
+import DeviceSetupCard from '../components/device/DeviceSetupCard';
+import {
+  connectBandWithPicker,
+  getRememberedBandId,
+  sendBandSessionState,
+  useBandStore,
+} from '../lib/bandStore';
+import { useChildState } from '../hooks/useChildState';
+import BandStateIndicator from '../components/session/BandStateIndicator';
+import {
+  bandReading,
+  bandSourceOf,
+  type BandSource,
+  displayedChildState,
+  overrideFromEvents,
+  type ClaimState,
+  type StateOverride,
+} from '../lib/childState/header';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import Pill from '../components/Pill';
@@ -35,13 +53,16 @@ import type { RecommendedActivity } from '../lib/planRecommender/types';
 
 type TrialResponse = Database['public']['Enums']['trial_response'];
 
-type ChildState = 'regulated' | 'amber' | 'dysregulated';
+type ChildState = ClaimState;
 
 const CHILD_STATES: { value: ChildState; i18nKey: string; captionKey: string; descKey: string; seeKey: string }[] = [
   { value: 'regulated', i18nKey: 'child_state_regulated', captionKey: 'child_state_caption_regulated', descKey: 'child_state_regulated_desc', seeKey: 'child_state_regulated_see' },
   { value: 'amber', i18nKey: 'child_state_amber', captionKey: 'child_state_caption_amber', descKey: 'child_state_amber_desc', seeKey: 'child_state_amber_see' },
   { value: 'dysregulated', i18nKey: 'child_state_dysregulated', captionKey: 'child_state_caption_dysregulated', descKey: 'child_state_dysregulated_desc', seeKey: 'child_state_dysregulated_see' },
 ];
+
+// How often a live session re-sends its state to the band over Bluetooth.
+const BAND_SESSION_RESYNC_MS = 10_000;
 
 export default function SessionRun() {
   const { t, i18n } = useTranslation();
@@ -54,7 +75,41 @@ export default function SessionRun() {
   const toast = useToast((s) => s.add);
   const isDebugMode = new URLSearchParams(window.location.search).get('debug') === '1';
 
+  // Session control is sent over the already-authorized BLE connection.
+  // BLE is the control plane; sensor data never travels through BLE.
+  // Every failure is logged and surfaced: the band's LED is how the
+  // therapist sees the session state, so a silent failure hides it.
+  // The connection is the page-wide one from bandStore (shared with
+  // DeviceSetupCard), which also reconnects on its own after a drop.
+  const [bandSync, setBandSync] = useState<'unknown' | 'ok' | 'failed'>('unknown');
+  const syncBandSessionState = useCallback(
+    async (state: 'ACTIVE' | 'RESUME' | 'PAUSE' | 'STOPPED') => {
+      const result = await sendBandSessionState(state);
+      // No band paired means nothing to keep in sync, so no warning.
+      if (result !== 'no-band') setBandSync(result === 'sent' ? 'ok' : 'failed');
+      return result === 'sent';
+    },
+    [],
+  );
+
   const { data: session, isLoading: sessionLoading } = useSession(sessionId);
+
+  // Live child state from the band. The band streams over Wi-Fi whether or
+  // not Bluetooth is connected, so the remembered band ID is enough; the
+  // baseline starts building during preflight.
+  const [rememberedBandId] = useState(() => getRememberedBandId());
+  const liveBandId = useBandStore((st) => st.bandId) ?? rememberedBandId;
+  const childDob = session?.child?.date_of_birth ?? null;
+  const childAgeYears = useMemo(
+    () => (childDob ? differenceInMonths(new Date(), new Date(childDob)) / 12 : null),
+    [childDob],
+  );
+  const liveChildState = useChildState(liveBandId, childAgeYears);
+  // What the band reads now: a signed-off state, or before sign-off an
+  // unvalidated estimate (shown dashed). Primitives, for effect deps.
+  const liveBand = bandReading(liveChildState.result, liveChildState.stale);
+  const liveBandState = liveBand?.state ?? null;
+  const liveBandValidated = liveBand?.validated ?? false;
   const { data: sessionActivities } = useSessionActivities(sessionId);
   const { data: activeGoals } = useActiveGoals(session?.child?.id);
   // Fetch existing trials for resume after refresh
@@ -78,6 +133,18 @@ export default function SessionRun() {
   const [, setCompositeScore] = useState(0.5);
   const [isPaused, setIsPaused] = useState(false);
   const isPausedRef = useRef(false);
+
+  // Needs a click: after a page reload the browser only hands the
+  // band back through its device picker.
+  const reconnectBand = useCallback(async () => {
+    try {
+      await connectBandWithPicker();
+      await syncBandSessionState(isPausedRef.current ? 'PAUSE' : 'ACTIVE');
+    } catch (error) {
+      console.warn('[Wearable] manual reconnect cancelled or failed', error);
+    }
+  }, [syncBandSessionState]);
+
   const [showNotes, setShowNotes] = useState(false);
   useScrollLock(showNotes);
   const [noteText, setNoteText] = useState('');
@@ -148,8 +215,9 @@ export default function SessionRun() {
   );
   const { data: activityLookup = {} } = useActivityLookup(planActivityIds);
 
-  // Therapist inputs
-  const [childState, setChildState] = useState<ChildState>('regulated');
+  // Therapist inputs. The header shows the band engine's state unless the
+  // therapist overrides it; an override stays until "Back to auto".
+  const [stateOverride, setStateOverride] = useState<StateOverride | null>(null);
   const [spontPulse, setSpontPulse] = useState(false);
   const [spontMoments, setSpontMoments] = useState<number[]>([]);
   const [spontSuggestPulse, setSpontSuggestPulse] = useState(false);
@@ -207,6 +275,20 @@ export default function SessionRun() {
 
     // Schedule outside synchronous effect to satisfy lint rule
     queueMicrotask(() => applyResume(resumeIndex, responses));
+
+    // Restore a therapist override that was in force before the refresh.
+    let cancelled = false;
+    supabase
+      .from('session_events')
+      .select('event_type, state_value, recorded_at, source')
+      .eq('session_id', sessionId!)
+      .eq('source', 'therapist')
+      .in('event_type', ['state_change', 'state_override_cleared'])
+      .order('recorded_at')
+      .then(({ data }) => {
+        if (!cancelled && data) setStateOverride(overrideFromEvents(data));
+      });
+    return () => { cancelled = true; };
   }, [phase, session, sessionActivities, existingTrials, sessionId, navigate, applyResume]);
 
   // Keep cvMetrics ref in sync for use in event handlers with stale closures
@@ -314,11 +396,31 @@ export default function SessionRun() {
         setFrozenMetrics(cvMetricsLatestRef.current);
         cvAdapterRef.current?.pause();
         if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+        void syncBandSessionState('PAUSE');
       }
     }
     document.addEventListener('visibilitychange', handleVisibility);
     return () => document.removeEventListener('visibilitychange', handleVisibility);
-  }, [phase]);
+  }, [phase, syncBandSessionState]);
+
+  // Whenever the live phase starts (including session resume after refresh),
+  // put the band into ACTIVE state, then keep re-sending the current state.
+  // The band holds it in RAM only, so a band reboot or a dropped Bluetooth
+  // link would otherwise leave its LED showing no session for the rest of it.
+  useEffect(() => {
+    if (phase !== 'live') return;
+    void syncBandSessionState(isPausedRef.current ? 'PAUSE' : 'ACTIVE');
+
+    let inFlight = false;
+    const timer = window.setInterval(() => {
+      if (inFlight) return;
+      inFlight = true;
+      void syncBandSessionState(isPausedRef.current ? 'PAUSE' : 'ACTIVE')
+        .finally(() => { inFlight = false; });
+    }, BAND_SESSION_RESYNC_MS);
+
+    return () => window.clearInterval(timer);
+  }, [phase, syncBandSessionState]);
 
   // Session timer
   useEffect(() => {
@@ -381,26 +483,34 @@ export default function SessionRun() {
         await startActivityMut.mutateAsync({ sessionActivityId: newActivities[0].id });
       }
       setPhase('live');
-      // Record initial child state
-      createSessionEvent.mutate({
-        sessionId,
-        eventType: 'state_change',
-        stateValue: 'regulated',
-        recordedByUserId: user.id,
-      });
     } catch {
       toast(t('error_generic'), 'error');
     }
   }
 
   function handleChildStateChange(newState: ChildState) {
-    if (isPaused || newState === childState || !sessionId || !user) return;
-    setChildState(newState);
+    // Tapping the therapist's own selection again hands the header back to the band.
+    if (newState === stateOverride?.state) { handleBackToAuto(); return; }
+    if (isPaused || !sessionId || !user) return;
+    setStateOverride({ state: newState, at: new Date().getTime() });
     createSessionEvent.mutate({
       sessionId,
       sessionActivityId: currentActivity?.id ?? null,
       eventType: 'state_change',
       stateValue: newState,
+      source: 'therapist',
+      recordedByUserId: user.id,
+    });
+  }
+
+  function handleBackToAuto() {
+    if (isPaused || !stateOverride || !sessionId || !user) return;
+    setStateOverride(null);
+    createSessionEvent.mutate({
+      sessionId,
+      sessionActivityId: currentActivity?.id ?? null,
+      eventType: 'state_override_cleared',
+      source: 'therapist',
       recordedByUserId: user.id,
     });
   }
@@ -451,6 +561,32 @@ export default function SessionRun() {
   const currentActivity = sessionActivities && sessionActivities.length > 0
     ? (sessionActivities[currentActivityIndex] ?? null)
     : null;
+
+  // Record the band's reading as it changes, so it can be compared with
+  // the therapist's observations. Signed-off states are source 'band';
+  // until sign-off they are unvalidated estimates, source 'band_estimate',
+  // which reports never show. A null value marks the band losing its
+  // state (a gap in its line).
+  const recordSessionEvent = createSessionEvent.mutate;
+  const currentActivityId = currentActivity?.id ?? null;
+  const lastRecordedBandRef = useRef<{ state: ClaimState | null; source: BandSource } | null>(null);
+  useEffect(() => {
+    if (phase !== 'live' || isPaused || !sessionId || !user) return;
+    const last = lastRecordedBandRef.current;
+    const source = liveBandState
+      ? bandSourceOf({ state: liveBandState, validated: liveBandValidated })
+      : last?.source ?? bandSourceOf(null);
+    if (last ? last.state === liveBandState && last.source === source : liveBandState === null) return;
+    lastRecordedBandRef.current = { state: liveBandState, source };
+    recordSessionEvent({
+      sessionId,
+      sessionActivityId: currentActivityId,
+      eventType: 'state_change',
+      stateValue: liveBandState,
+      source,
+      recordedByUserId: user.id,
+    });
+  }, [liveBandState, liveBandValidated, phase, isPaused, sessionId, user, currentActivityId, recordSessionEvent]);
 
   function getCurrentActivityResponse(): TrialResponse | null {
     if (!currentActivity) return null;
@@ -577,6 +713,8 @@ export default function SessionRun() {
   }
 
   async function handleEndSession() {
+    await syncBandSessionState('STOPPED');
+
     // End current activity
     if (currentActivity) {
       await endActivityMut.mutateAsync({ sessionActivityId: currentActivity.id });
@@ -614,12 +752,14 @@ export default function SessionRun() {
       isPausedRef.current = false;
       setFrozenMetrics(null);
       cvAdapterRef.current?.resume();
+      void syncBandSessionState('RESUME');
     } else {
       setIsPaused(true);
       isPausedRef.current = true;
       setFrozenMetrics(cvMetrics);
       cvAdapterRef.current?.pause();
       if (timerRef.current) { clearInterval(timerRef.current); timerRef.current = null; }
+      void syncBandSessionState('PAUSE');
     }
   }
 
@@ -809,6 +949,9 @@ export default function SessionRun() {
 
           {/* Cards */}
           <div className="space-y-4">
+            {/* Habilitate Therapy Band */}
+            <DeviceSetupCard />
+
             {/* Camera & Microphone */}
             <div className="rounded-2xl border border-border bg-surface p-4">
               <div className="flex items-center justify-between">
@@ -1055,6 +1198,10 @@ export default function SessionRun() {
     : displayMetrics?.face_state === 'looking_away' || displayMetrics?.face_state === 'head_down' ? '#D97706'
     : '#9C9C95';
 
+  const childState = displayedChildState(stateOverride, liveBand);
+  // Unvalidated band estimates are drawn dashed, never in the solid style
+  // a therapist's own selection (or a signed-off state) uses.
+  const childStateIsEstimate = !stateOverride && !!liveBand && !liveBand.validated;
   const pillStyle: Record<ChildState, { bg: string; color: string; dot: string }> = {
     regulated: { bg: '#E8F5F0', color: '#1A6B4F', dot: '#4ADE80' },
     amber: { bg: '#FEF3E2', color: '#92600A', dot: '#FBBF24' },
@@ -1083,18 +1230,34 @@ export default function SessionRun() {
           <span className="text-[13px]" style={S.text3}>{t('activity_of', { current: currentActivityIndex + 1, total: totalActivities })}</span>
         </div>
 
-        {/* Center: child state pills + info popover */}
+        {/* Center: child state pills + info popover. Fixed size: the state
+            changes by itself every 12-30 s, so nothing here may change the
+            header's width or height (constant borders, a reserved dot slot,
+            fixed-height rows that never widen the column). */}
         <div className="relative flex flex-col items-center mx-auto">
           <div className="flex items-center gap-1.5">
             {CHILD_STATES.map((cs) => {
               const active = childState === cs.value;
+              const estimate = active && childStateIsEstimate;
+              const overridden = active && stateOverride?.state === cs.value;
               const ps = pillStyle[cs.value];
               return (
                 <button key={cs.value} onClick={() => handleChildStateChange(cs.value)}
                   disabled={isPaused}
-                  className={`flex items-center gap-1.5 rounded-full px-3 text-[12px] font-semibold transition-all ${isPaused ? 'opacity-40 pointer-events-none' : ''}`}
-                  style={{ height: 28, backgroundColor: active ? ps.bg : 'transparent', color: active ? ps.color : '#8E8EA0', border: active ? 'none' : '1px solid #D4D4DC' }}>
-                  {active && <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ps.dot }} />}
+                  aria-pressed={active}
+                  title={estimate ? t('child_state_estimate_tag') : overridden ? t('child_state_tap_again_for_auto') : undefined}
+                  className={`flex items-center gap-1.5 rounded-full px-3 text-[12px] font-semibold transition-colors ${isPaused ? 'opacity-40 pointer-events-none' : ''}`}
+                  style={{
+                    height: 28,
+                    backgroundColor: estimate ? '#FFFFFF' : active ? ps.bg : 'transparent',
+                    color: active ? ps.color : '#8E8EA0',
+                    border: `1.5px ${estimate ? 'dashed' : 'solid'} ${estimate ? ps.color : active ? 'transparent' : '#D4D4DC'}`,
+                  }}>
+                  <span className="w-2 h-2 rounded-full shrink-0"
+                    style={{
+                      visibility: active ? 'visible' : 'hidden',
+                      ...(estimate ? { border: `1.5px solid ${ps.dot}` } : { backgroundColor: ps.dot }),
+                    }} />
                   {t(cs.i18nKey)}
                 </button>
               );
@@ -1107,10 +1270,14 @@ export default function SessionRun() {
               </svg>
             </button>
           </div>
-          {/* Micro-caption — hidden on short viewports to save space */}
-          <span className="hidden text-[11px] mt-1 sm:inline" style={{ color: '#8E8EA0', fontWeight: 500 }}>
-            {t(CHILD_STATES.find((cs) => cs.value === childState)?.captionKey ?? 'child_state_caption_regulated')}
+          {/* Micro-caption — hidden on short viewports to save space. Its row is
+              reserved even when no state is shown. */}
+          <span className="hidden mt-1 h-4 w-0 min-w-full truncate text-center text-[11px] leading-4 sm:block"
+            style={{ color: '#8E8EA0', fontWeight: 500, visibility: childState ? 'visible' : 'hidden' }}>
+            {childState ? t(CHILD_STATES.find((cs) => cs.value === childState)?.captionKey ?? 'child_state_caption_regulated') : null}
           </span>
+          <BandStateIndicator live={liveBandId ? liveChildState : null} debug={isDebugMode}
+            override={stateOverride} />
 
           {/* Info popover */}
           {showChildStateInfo && (<>
@@ -1150,6 +1317,18 @@ export default function SessionRun() {
             {isPaused ? t('resume_session') : t('pause_session')}
           </button>
           {!isOnline && <Pill variant="warning">{t('offline_buffering')}</Pill>}
+          {bandSync === 'failed' && (
+            <button
+              type="button"
+              onClick={() => void reconnectBand()}
+              title={t('band_session_reconnect')}
+              className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-warning"
+            >
+              <Pill variant="warning">
+                {t('band_session_not_synced')} · {t('band_session_reconnect')}
+              </Pill>
+            </button>
+          )}
         </div>
       </header>
 
