@@ -895,14 +895,11 @@
   "band_state_insufficient": "not enough reliable signals",
   "band_state_flapping": "Flapping",
   "band_state_debug_provisional": "Provisional, not clinically validated",
-  "child_state_set_by_therapist": "Set by therapist · {{time}}",
-  "child_state_back_to_auto": "Back to auto",
   "child_state_auto_from_band": "Auto · from band",
   "child_state_no_band_hint": "No band connected · tap a state to record it",
-  "band_state_reads": "Band reads {{state}}",
   "child_state_timeline_therapist": "Therapist",
   "child_state_timeline_band": "Band",
   "child_state_none": "No state",
   "child_state_estimate_tag": "Band estimate · not validated",
-  "band_state_reads_estimate": "Band estimate: {{state}} (not validated)"
+  "child_state_tap_again_for_auto": "Set by therapist. Tap again to follow the band."
 }

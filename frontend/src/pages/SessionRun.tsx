@@ -489,7 +489,9 @@ export default function SessionRun() {
   }
 
   function handleChildStateChange(newState: ChildState) {
-    if (isPaused || newState === stateOverride?.state || !sessionId || !user) return;
+    // Tapping the therapist's own selection again hands the header back to the band.
+    if (newState === stateOverride?.state) { handleBackToAuto(); return; }
+    if (isPaused || !sessionId || !user) return;
     setStateOverride({ state: newState, at: new Date().getTime() });
     createSessionEvent.mutate({
       sessionId,
@@ -1228,29 +1230,34 @@ export default function SessionRun() {
           <span className="text-[13px]" style={S.text3}>{t('activity_of', { current: currentActivityIndex + 1, total: totalActivities })}</span>
         </div>
 
-        {/* Center: child state pills + info popover */}
+        {/* Center: child state pills + info popover. Fixed size: the state
+            changes by itself every 12-30 s, so nothing here may change the
+            header's width or height (constant borders, a reserved dot slot,
+            fixed-height rows that never widen the column). */}
         <div className="relative flex flex-col items-center mx-auto">
           <div className="flex items-center gap-1.5">
             {CHILD_STATES.map((cs) => {
               const active = childState === cs.value;
               const estimate = active && childStateIsEstimate;
+              const overridden = active && stateOverride?.state === cs.value;
               const ps = pillStyle[cs.value];
               return (
                 <button key={cs.value} onClick={() => handleChildStateChange(cs.value)}
                   disabled={isPaused}
                   aria-pressed={active}
-                  title={estimate ? t('child_state_estimate_tag') : undefined}
-                  className={`flex items-center gap-1.5 rounded-full px-3 text-[12px] font-semibold transition-all ${isPaused ? 'opacity-40 pointer-events-none' : ''}`}
+                  title={estimate ? t('child_state_estimate_tag') : overridden ? t('child_state_tap_again_for_auto') : undefined}
+                  className={`flex items-center gap-1.5 rounded-full px-3 text-[12px] font-semibold transition-colors ${isPaused ? 'opacity-40 pointer-events-none' : ''}`}
                   style={{
                     height: 28,
                     backgroundColor: estimate ? '#FFFFFF' : active ? ps.bg : 'transparent',
                     color: active ? ps.color : '#8E8EA0',
-                    border: estimate ? `1.5px dashed ${ps.color}` : active ? 'none' : '1px solid #D4D4DC',
+                    border: `1.5px ${estimate ? 'dashed' : 'solid'} ${estimate ? ps.color : active ? 'transparent' : '#D4D4DC'}`,
                   }}>
-                  {active && (
-                    <span className="w-2 h-2 rounded-full"
-                      style={estimate ? { border: `1.5px solid ${ps.dot}` } : { backgroundColor: ps.dot }} />
-                  )}
+                  <span className="w-2 h-2 rounded-full shrink-0"
+                    style={{
+                      visibility: active ? 'visible' : 'hidden',
+                      ...(estimate ? { border: `1.5px solid ${ps.dot}` } : { backgroundColor: ps.dot }),
+                    }} />
                   {t(cs.i18nKey)}
                 </button>
               );
@@ -1263,14 +1270,14 @@ export default function SessionRun() {
               </svg>
             </button>
           </div>
-          {/* Micro-caption — hidden on short viewports to save space */}
-          {childState && (
-            <span className="hidden text-[11px] mt-1 sm:inline" style={{ color: '#8E8EA0', fontWeight: 500 }}>
-              {t(CHILD_STATES.find((cs) => cs.value === childState)?.captionKey ?? 'child_state_caption_regulated')}
-            </span>
-          )}
+          {/* Micro-caption — hidden on short viewports to save space. Its row is
+              reserved even when no state is shown. */}
+          <span className="hidden mt-1 h-4 w-0 min-w-full truncate text-center text-[11px] leading-4 sm:block"
+            style={{ color: '#8E8EA0', fontWeight: 500, visibility: childState ? 'visible' : 'hidden' }}>
+            {childState ? t(CHILD_STATES.find((cs) => cs.value === childState)?.captionKey ?? 'child_state_caption_regulated') : null}
+          </span>
           <BandStateIndicator live={liveBandId ? liveChildState : null} debug={isDebugMode}
-            override={stateOverride} onBackToAuto={handleBackToAuto} disabled={isPaused} />
+            override={stateOverride} />
 
           {/* Info popover */}
           {showChildStateInfo && (<>

@@ -250,10 +250,11 @@ while the Band line reads "learning this child's baseline", "not enough
 reliable signals" or "no live data". In each step below, the highlighted
 pill should match the debug line's provisional state.
 
-Therapist override (check once): tap Amber. The pill turns solid and the
-line reads "Set by therapist · HH:MM" with a **Back to auto** button,
-plus "Band estimate: X (not validated)". Refresh: the override is still
-there. Tap Back to auto: the pills follow the band again (dashed).
+Therapist override (check once): tap Amber. The pill turns solid; no
+extra text appears. Refresh: the override is still there. Tap Amber
+again: the pills follow the band again (dashed). Throughout, and while
+the state changes by itself, **nothing on the page may move**: the
+header keeps the same size whether a pill is lit, dashed, solid or none.
 
 Recording: in `session_events` the taps have `source = 'therapist'` (the
 second as `state_override_cleared`), and each change of the dashed pill

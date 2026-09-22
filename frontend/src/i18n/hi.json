@@ -847,14 +847,11 @@
   "band_state_insufficient": "पर्याप्त भरोसेमंद संकेत नहीं",
   "band_state_flapping": "हाथ फड़फड़ाना",
   "band_state_debug_provisional": "अस्थायी, क्लिनिकल रूप से पुष्ट नहीं",
-  "child_state_set_by_therapist": "थेरेपिस्ट द्वारा सेट · {{time}}",
-  "child_state_back_to_auto": "ऑटो पर वापस",
   "child_state_auto_from_band": "ऑटो · बैंड से",
   "child_state_no_band_hint": "कोई बैंड जुड़ा नहीं · दर्ज करने के लिए स्थिति चुनें",
-  "band_state_reads": "बैंड के अनुसार {{state}}",
   "child_state_timeline_therapist": "थेरेपिस्ट",
   "child_state_timeline_band": "बैंड",
   "child_state_none": "कोई स्थिति नहीं",
   "child_state_estimate_tag": "बैंड का अनुमान · पुष्ट नहीं",
-  "band_state_reads_estimate": "बैंड का अनुमान: {{state}} (पुष्ट नहीं)"
+  "child_state_tap_again_for_auto": "थेरेपिस्ट द्वारा सेट। बैंड के अनुसार चलाने के लिए फिर से टैप करें।"
 }
