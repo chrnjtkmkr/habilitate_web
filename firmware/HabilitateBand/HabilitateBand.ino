@@ -81,7 +81,7 @@
 // CONFIGURATION — edit these
 // ============================================================
 
-#define FIRMWARE_VERSION "0.6.0"
+#define FIRMWARE_VERSION "0.6.1"
 
 // Beat-detector trace (~3 lines/s plus one per beat). Keep 0 in normal
 // use: at that rate it pushes crash output out of the serial monitor.
@@ -312,7 +312,7 @@ struct SensorReading {
   float ax, ay, az;   // Accelerometer (g)      — MPU6050
   float gx, gy, gz;   // Gyroscope (dps)        — MPU6050
   float temp;          // Temperature (°C)       — STTS22H
-  float hr;            // Heart rate (BPM)       — MAX30102, -1 if no finger
+  float hr;            // Heart rate (BPM) from clean beat intervals, -1 if none
   float hrv;           // RMSSD (ms) from clean beat intervals — -1 if not enough
   float spo2;          // SpO2 (%)               — MAX30102, -1 if no finger
   float gsr;           // GSR (raw ADC counts)   — GPIO1
@@ -598,7 +598,6 @@ uint32_t ppgOverflowTotal  = 0;
 #define SHIFT_AMOUNT      25
 #define HISTORY_SIZE       5
 #define NO_FINGER_HOLD_MS 2000
-#define MAX_HR_STEP        8    // max BPM change accepted per update
 #define MAX_SPO2_STEP      3    // max % SpO2 change accepted per update
 #define MIN_PERFUSION_IDX  0.30f
 
@@ -614,14 +613,11 @@ int8_t  spo2Valid      = 0;
 int32_t heartRateValue = -1;
 int8_t  heartRateValid = 0;
 
-int hrHistory[HISTORY_SIZE];
 int spo2History[HISTORY_SIZE];
 int historyCount = 0;
 int historyIndex = 0;
 
-int lastValidHR   = -1;
 int lastValidSpO2 = -1;
-volatile int currentHR   = -1;
 volatile int currentSpO2 = -1;
 
 // Adaptive finger detection
@@ -807,6 +803,15 @@ void acceptInterval(float ibi, uint32_t beatTimeMs) {
   queueBeat(ibi, ok, beatTimeMs);
 }
 
+// Heart rate in bpm from the median of the recent clean beat intervals,
+// or -1 without a settled rhythm or a clean beat in the last 5 s.
+float heartRateFromBeats() {
+  if (!fingerPresent || beat.ibiRefCount < 3) return -1.0f;
+  if (millis() - beat.lastAcceptedMs > RMSSD_STALE_MS) return -1.0f;
+  const float medianIbi = medianOf(beat.ibiRef, beat.ibiRefCount);
+  return medianIbi > 0.0f ? 60000.0f / medianIbi : -1.0f;
+}
+
 // RMSSD in ms over the last RMSSD_PAIRS clean successive differences,
 // or -1 when there is not enough recent clean data.
 float computeRMSSD() {
@@ -946,10 +951,23 @@ int medianOfHistory(int* arr, int count) {
   return sorted[count / 2];
 }
 
+// SpO2 only. Heart rate comes from the beat detector instead
+// (heartRateFromBeats): on the wrist the perfusion gate below rejects most
+// windows, so the Maxim routine produced no HR at all from 0.5.0 on, while
+// beat detection, which judges peaks by prominence, kept working.
 void processBuffer() {
   float pi  = computePerfusionIndex();
 
+#if DEBUG_HRV
+  static unsigned long lastPiLogMs = 0;
+  const bool logThis = millis() - lastPiLogMs >= 5000;
+  if (logThis) lastPiLogMs = millis();
+#endif
+
   if (pi < MIN_PERFUSION_IDX) {
+#if DEBUG_HRV
+    if (logThis) Serial.printf("[SPO2-DBG] perfusion %.2f%% < %.2f%%: skipped\n", pi, MIN_PERFUSION_IDX);
+#endif
     return;
   }
 
@@ -959,34 +977,33 @@ void processBuffer() {
     irBuffer, MAX_BUF_LEN, redBuffer,
     &spo2Value, &spo2Valid, &heartRateValue, &heartRateValid);
 
-  bool hrOk   = heartRateValid  && heartRateValue >= 30 && heartRateValue <= 220;
-  bool spo2Ok = spo2Valid       && spo2Value       >= 70 && spo2Value       <= 100;
+  const bool spo2Ok = spo2Valid && spo2Value >= 70 && spo2Value <= 100;
 
-  if (hrOk)   hrHistory  [historyIndex % HISTORY_SIZE] = heartRateValue;
-  if (spo2Ok) spo2History[historyIndex % HISTORY_SIZE] = spo2Value;
-  if (hrOk || spo2Ok) {
+#if DEBUG_HRV
+  if (logThis) {
+    Serial.printf("[SPO2-DBG] perfusion %.2f%% spo2 %ld (%s), maxim hr %ld vs beats %.0f\n",
+                  pi, (long)spo2Value, spo2Ok ? "ok" : "invalid",
+                  (long)heartRateValue, heartRateFromBeats());
+  }
+#endif
+
+  if (spo2Ok) {
+    spo2History[historyIndex % HISTORY_SIZE] = spo2Value;
     historyIndex++;
     if (historyCount < HISTORY_SIZE) historyCount++;
   }
 
   if (historyCount == 0) return;
 
-  int hrCand   = hrOk   ? medianOfHistory(hrHistory,   historyCount) : lastValidHR;
   int spo2Cand = spo2Ok ? medianOfHistory(spo2History, historyCount) : lastValidSpO2;
 
   // Rate-limit large jumps
-  auto clamp = [](int cand, int last, int step) -> int {
-    if (last <= 0 || cand <= 0) return cand;
-    int d = cand - last;
-    if (d >  step) return last + step;
-    if (d < -step) return last - step;
-    return cand;
-  };
+  if (lastValidSpO2 > 0 && spo2Cand > 0) {
+    const int d = spo2Cand - lastValidSpO2;
+    if (d >  MAX_SPO2_STEP) spo2Cand = lastValidSpO2 + MAX_SPO2_STEP;
+    if (d < -MAX_SPO2_STEP) spo2Cand = lastValidSpO2 - MAX_SPO2_STEP;
+  }
 
-  hrCand   = clamp(hrCand,   lastValidHR,   MAX_HR_STEP);
-  spo2Cand = clamp(spo2Cand, lastValidSpO2, MAX_SPO2_STEP);
-
-  if (hrCand   > 0) { lastValidHR   = hrCand;   currentHR   = lastValidHR;   }
   if (spo2Cand > 0) { lastValidSpO2 = spo2Cand; currentSpO2 = lastValidSpO2; }
 }
 
@@ -1014,7 +1031,6 @@ void handlePpgSample(uint32_t redRaw, uint32_t irRaw) {
 
   if (!hasFinger && fingerPresent && now - lastFingerSeenMs >= NO_FINGER_HOLD_MS) {
     fingerPresent  = false;
-    currentHR      = lastValidHR   = -1;
     currentSpO2    = lastValidSpO2 = -1;
     bufferIndex    = historyCount  = 0;
     resetBeatDetector();
@@ -1025,7 +1041,6 @@ void handlePpgSample(uint32_t redRaw, uint32_t irRaw) {
   // No good-quality reading for a while: show no value rather than a
   // frozen old one. HRV has its own staleness check (RMSSD_STALE_MS).
   if (lastValidReadingMs > 0 && now - lastValidReadingMs > READING_STALE_MS) {
-    currentHR   = lastValidHR   = -1;
     currentSpO2 = lastValidSpO2 = -1;
   }
 
@@ -1119,7 +1134,7 @@ SensorReading readSensors() {
   }
 
   r.temp = lastValidTemperature;       // STTS22H — updated by updateTemperature()
-  r.hr   = (float)currentHR;          // MAX30102 — -1 if no finger
+  r.hr   = heartRateFromBeats();       // from clean beat intervals — -1 if none
   r.spo2 = (float)currentSpO2;        // MAX30102 — -1 if no finger
   r.gsr  = (float)readGSR();
   // Independent of hr: HRV comes from the beat detector, HR from the Maxim

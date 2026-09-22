@@ -9,7 +9,7 @@ lines.
 Every recorded run must include the identity line printed at boot:
 
 ```
-[BOOT] HAB-001 firmware 0.6.0 mac 24:58:7C:XX:XX:XX
+[BOOT] HAB-001 firmware 0.6.1 mac 24:58:7C:XX:XX:XX
 [BOOT] Reset reason: POWERON
 [BOOT] Previous boot: no record (first boot after power-on)
 ```
@@ -165,8 +165,13 @@ retries resume afterwards.
 
 ## H1. Heart rate against a pulse oximeter (required before HRV is "done")
 
-Firmware 0.5.0 feeds the HR/SpO2 routine the 25 samples/s it was
-written for; earlier versions fed it 12.5, which doubles the HR.
+From firmware 0.6.1 heart rate comes from the beat detector: 60000 ÷ the
+median of the last 8 clean beat intervals. (Up to 0.4.6 the Maxim routine
+reported it at double the true rate; in 0.5.0 its perfusion check
+rejected most wrist readings, so HR was always empty.) SpO2 still comes
+from the Maxim routine; with `DEBUG_HRV 1` the log prints the perfusion
+index every 5 s (`[SPO2-DBG] ...`), which shows why SpO2 is or is not
+available.
 
 1. Clip a pulse oximeter on one finger and place a finger of the other
    hand (or the wrist, as worn) on the band's sensor. Sit still.
