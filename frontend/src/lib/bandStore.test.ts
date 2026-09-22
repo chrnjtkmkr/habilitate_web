@@ -176,4 +176,33 @@ describe('bandStore session state', () => {
     expect(band.connectSpy).not.toHaveBeenCalled();
     expect(store.useBandStore.getState().status).toBe('disconnected');
   });
+
+  it('forgets the band: disconnects, clears the remembered ID, revokes permission', async () => {
+    const band = fakeBand();
+    const forget = vi.fn(async () => {});
+    (band.device as unknown as { forget: () => Promise<void> }).forget = forget;
+    const store = await loadStore(band);
+    await store.connectBandWithPicker();
+    expect(localStorage.getItem('habilitate.bandId')).toBe('HAB-001');
+
+    await store.forgetBand();
+    expect(forget).toHaveBeenCalled();
+    expect(localStorage.getItem('habilitate.bandId')).toBeNull();
+    expect(store.useBandStore.getState()).toMatchObject({ device: null, bandId: null, status: 'disconnected' });
+
+    await vi.advanceTimersByTimeAsync(30_000);
+    expect(band.connectSpy).not.toHaveBeenCalled();
+    expect(await store.sendBandSessionState('ACTIVE')).toBe('no-band');
+  });
+
+  it('changes band: forgets the current one, then opens the picker', async () => {
+    const band = fakeBand();
+    const store = await loadStore(band);
+    await store.connectBandWithPicker();
+    const { connectToHabilitateBand } = await import('../services/bleService');
+
+    await store.changeBand();
+    expect(connectToHabilitateBand).toHaveBeenCalledTimes(2);
+    expect(store.useBandStore.getState().status).toBe('connected');
+  });
 });

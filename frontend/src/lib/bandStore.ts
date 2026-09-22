@@ -148,6 +148,35 @@ export function disconnectBand() {
   useBandStore.setState({ device: null, bandId: null, status: 'disconnected', error: null });
 }
 
+// Disconnects and forgets the current band: the remembered ID is cleared
+// and, where the browser supports it, its Bluetooth permission revoked,
+// so nothing reconnects it until it is picked again.
+export async function forgetBand() {
+  const { device } = useBandStore.getState();
+  disconnectBand();
+  try {
+    localStorage.removeItem(BAND_ID_STORAGE_KEY);
+  } catch {
+    // Storage unavailable: nothing was remembered.
+  }
+  if (device?.forget) {
+    try {
+      await device.forget();
+    } catch (error) {
+      // The band is already disconnected and unremembered; a failed
+      // permission revoke only means Chrome still lists it as allowed.
+      console.warn('[Wearable] Bluetooth forget() failed', error);
+    }
+  }
+}
+
+// Forgets the current band and opens the device picker for another one.
+// Must run from a user gesture, like connectBandWithPicker().
+export async function changeBand() {
+  await forgetBand();
+  return connectBandWithPicker();
+}
+
 // Returns a connected device, reconnecting the known one if needed.
 async function ensureConnected(): Promise<HabilitateBluetoothDevice | null> {
   const { device } = useBandStore.getState();

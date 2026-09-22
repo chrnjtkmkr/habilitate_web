@@ -15,8 +15,10 @@ import {
   WIFI_STATUS_TIMEOUT,
 } from '../services/wifiStatus';
 import {
+  changeBand as changeBandInStore,
   connectBandWithPicker,
   disconnectBand,
+  forgetBand as forgetBandInStore,
   restoreBand,
   useBandStore,
 } from '../lib/bandStore';
@@ -312,6 +314,30 @@ export function useWearable() {
   }, []);
 
   // ==========================================================
+  // FORGET / CHANGE BAND
+  // ==========================================================
+  // Nothing from the previous band's Wi-Fi setup carries over.
+
+  const resetWifiState = useCallback(() => {
+    setWifiStatus('NO_CREDENTIALS');
+    setWifiError(null);
+    setWifiNetworks([]);
+    setWifiScanStatus('idle');
+    setWifiScanError(null);
+  }, []);
+
+  const forgetBand = useCallback(async () => {
+    await forgetBandInStore();
+    resetWifiState();
+  }, [resetWifiState]);
+
+  // Opens the browser's device picker, so it must run from a click.
+  const changeBand = useCallback(async () => {
+    resetWifiState();
+    return changeBandInStore();
+  }, [resetWifiState]);
+
+  // ==========================================================
   // RETURN API
   // ==========================================================
 
@@ -339,6 +365,8 @@ export function useWearable() {
 
     connect,
     disconnect,
+    forgetBand,
+    changeBand,
     restoreConnection,
     checkWiFiStatus,
     scanWiFi,

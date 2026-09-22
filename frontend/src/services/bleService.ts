@@ -86,6 +86,10 @@ export interface HabilitateBluetoothDevice {
 
   gatt?: HabilitateBluetoothGattServer;
 
+  // Revokes this origin's permission for the device (Chrome 101+), so
+  // it is no longer restored silently and must be picked again.
+  forget?(): Promise<void>;
+
   addEventListener(
     type: 'gattserverdisconnected',
     listener: (event: Event) => void,
@@ -246,25 +250,18 @@ export async function reconnectToAuthorizedHabilitateBand(
       return null;
     }
 
-    // If we previously connected to a specific band,
-    // prefer that exact device.
-    let device: HabilitateBluetoothDevice | undefined;
-
-    if (preferredBandId) {
-      device = authorizedDevices.find(
-        (candidate) =>
-          candidate.name ===
-          `Habilitate-${preferredBandId}`,
-      );
+    // Only ever restore the exact band that was paired last. Falling back
+    // to "any Habilitate band" would silently connect the wrong band once
+    // a second one has been authorised in this browser.
+    if (!preferredBandId) {
+      return null;
     }
 
-    // Otherwise look for any Habilitate band.
-    if (!device) {
-      device = authorizedDevices.find(
-        (candidate) =>
-          candidate.name?.startsWith('Habilitate-'),
-      );
-    }
+    const device = authorizedDevices.find(
+      (candidate) =>
+        candidate.name ===
+        `Habilitate-${preferredBandId}`,
+    );
 
     if (!device || !device.gatt) {
       return null;
@@ -449,7 +446,17 @@ export async function scanWiFiNetworks(
     WiFiNetwork
   >();
 
-  return new Promise(async (resolve, reject) => {
+  // The promise is settled by finish(); the async set-up below runs in
+  // this function rather than inside the executor, where a thrown error
+  // would be lost instead of rejecting the promise.
+  let resolve!: (networks: WiFiNetwork[]) => void;
+  let reject!: (error: Error) => void;
+  const scanResult = new Promise<WiFiNetwork[]>((res, rej) => {
+    resolve = res;
+    reject = rej;
+  });
+
+  {
     let finished = false;
 
     const cleanup = () => {
@@ -602,5 +609,7 @@ export async function scanWiFiNetworks(
             ),
       );
     }
-  });
+  }
+
+  return scanResult;
 }

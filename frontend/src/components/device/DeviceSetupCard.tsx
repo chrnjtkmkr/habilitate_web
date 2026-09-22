@@ -22,6 +22,9 @@ export default function DeviceSetupCard() {
   const [changingWifi, setChangingWifi] =
     useState(false);
 
+  const [confirmingForget, setConfirmingForget] =
+    useState(false);
+
   const [selectedSSID, setSelectedSSID] =
     useState('');
 
@@ -44,6 +47,8 @@ const {
   wifiScanError,
 
   connect,
+  forgetBand,
+  changeBand,
   scanWiFi,
   configureWiFi,
 } = useWearable();
@@ -57,6 +62,34 @@ const {
       await connect();
     } catch {
       // Error is already stored in useWearable.
+    }
+  }
+
+  // ==========================================================
+  // CHANGE / FORGET BAND
+  // ==========================================================
+
+  function resetSetupForm() {
+    setChangingWifi(false);
+    setSelectedSSID('');
+    setPassword('');
+    setConfirmingForget(false);
+  }
+
+  async function handleForgetBand() {
+    resetSetupForm();
+    await forgetBand();
+  }
+
+  // The device picker needs this click, so nothing awaits before it
+  // except forgetting the current band.
+  async function handleChangeBand() {
+    resetSetupForm();
+    try {
+      await changeBand();
+    } catch {
+      // Cancelled picker or failed connect: the error is in useWearable
+      // and the card offers "Connect via Bluetooth" again.
     }
   }
 
@@ -439,12 +472,56 @@ const {
             bandId && (
               <div className="rounded-xl border border-border bg-background p-4">
                 <p className="text-xs text-ink-secondary">
-                  Connected Band ID
+                  {t('band_connected_id')}
                 </p>
 
                 <p className="mt-1 text-lg font-semibold text-ink-primary">
                   {bandId}
                 </p>
+
+                {/* Switching bands: forget this one, then pick another. */}
+                {confirmingForget ? (
+                  <div className="mt-3 rounded-lg border border-danger/20 bg-danger/5 p-3">
+                    <p className="text-sm text-ink-primary">
+                      {t('band_forget_confirm', { band: bandId })}
+                    </p>
+                    <div className="mt-3 flex justify-end gap-2">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setConfirmingForget(false)}
+                      >
+                        {t('band_cancel')}
+                      </Button>
+                      <Button
+                        variant="danger"
+                        size="sm"
+                        onClick={handleForgetBand}
+                      >
+                        {t('band_forget_confirm_button')}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="mt-3 flex flex-wrap justify-end gap-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setConfirmingForget(true)}
+                      disabled={wifiProvisioning || wifiScanning}
+                    >
+                      {t('band_forget')}
+                    </Button>
+                    <Button
+                      variant="secondary"
+                      size="sm"
+                      onClick={handleChangeBand}
+                      disabled={wifiProvisioning || wifiScanning}
+                    >
+                      {t('band_change')}
+                    </Button>
+                  </div>
+                )}
               </div>
             )}
 
