@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 
 import {
+  connectGatt,
   connectToHabilitateBand,
   disconnectFromHabilitateBand,
   reconnectToAuthorizedHabilitateBand,
@@ -43,8 +44,13 @@ export const useBandStore = create<BandStore>(() => ({
 const BAND_ID_STORAGE_KEY = 'habilitate.bandId';
 const RECONNECT_MIN_MS = 2_000;
 const RECONNECT_MAX_MS = 15_000;
+// A dropped link shows "Connecting..." only this long. After that the card
+// offers "Connect via Bluetooth" again, while the same band keeps being
+// retried quietly in the background (it may just be switched off for now).
+export const RECONNECT_UI_GRACE_MS = 8_000;
 
 let reconnectTimer: number | null = null;
+let reconnectGraceTimer: number | null = null;
 let reconnectDelayMs = RECONNECT_MIN_MS;
 // Set by an explicit disconnect so the link is not revived behind the
 // user's back.
@@ -67,20 +73,30 @@ export function getRememberedBandId(): string | null {
   }
 }
 
-function clearReconnectTimer() {
+function clearRetryTimer() {
   if (reconnectTimer !== null) {
     window.clearTimeout(reconnectTimer);
     reconnectTimer = null;
   }
 }
 
+// Ends the reconnect cycle: the pending retry and the "Connecting..." grace.
+function clearReconnectTimer() {
+  clearRetryTimer();
+  if (reconnectGraceTimer !== null) {
+    window.clearTimeout(reconnectGraceTimer);
+    reconnectGraceTimer = null;
+  }
+}
+
 function scheduleReconnect(device: HabilitateBluetoothDevice) {
-  clearReconnectTimer();
+  clearRetryTimer(); // not the grace timer: it must survive failed retries
   reconnectTimer = window.setTimeout(async () => {
     reconnectTimer = null;
     if (!reconnectWanted || useBandStore.getState().device !== device) return;
     try {
-      await device.gatt?.connect();
+      await connectGatt(device);
+      clearReconnectTimer();
       reconnectDelayMs = RECONNECT_MIN_MS;
       useBandStore.setState({ status: 'connected', error: null });
     } catch (error) {
@@ -94,6 +110,9 @@ function scheduleReconnect(device: HabilitateBluetoothDevice) {
 function handleDisconnected(event: Event) {
   const device = event.target as unknown as HabilitateBluetoothDevice;
   if (useBandStore.getState().device !== device) return;
+  // Only a link we had counts. Abandoning a timed-out connect can fire
+  // this event too, and must not restart the reconnect cycle.
+  if (useBandStore.getState().status !== 'connected') return;
   if (!reconnectWanted) {
     useBandStore.setState({ status: 'disconnected' });
     return;
@@ -102,6 +121,13 @@ function handleDisconnected(event: Event) {
   useBandStore.setState({ status: 'reconnecting' });
   reconnectDelayMs = RECONNECT_MIN_MS;
   scheduleReconnect(device);
+  reconnectGraceTimer = window.setTimeout(() => {
+    reconnectGraceTimer = null;
+    const state = useBandStore.getState();
+    if (state.device === device && state.status === 'reconnecting') {
+      useBandStore.setState({ status: 'disconnected' });
+    }
+  }, RECONNECT_UI_GRACE_MS);
 }
 
 function adoptDevice(device: HabilitateBluetoothDevice, bandId: string) {
@@ -184,7 +210,7 @@ async function ensureConnected(): Promise<HabilitateBluetoothDevice | null> {
     return (await restoreBand()) ? useBandStore.getState().device : null;
   }
   if (device.gatt?.connected) return device;
-  await device.gatt?.connect();
+  await connectGatt(device);
   clearReconnectTimer();
   useBandStore.setState({ status: 'connected', error: null });
   return device;

@@ -9,6 +9,7 @@ function fakeBand(bandId = 'HAB-001') {
   const writes: string[] = [];
   let connected = true;
   let failConnect = false;
+  let hang = false;
 
   const characteristic = {
     readValue: async () => new DataView(new TextEncoder().encode(bandId).buffer),
@@ -28,6 +29,7 @@ function fakeBand(bandId = 'HAB-001') {
     gatt: {
       get connected() { return connected; },
       connect: vi.fn(async () => {
+        if (hang) return new Promise<never>(() => {});
         if (failConnect) throw new Error('Bluetooth Device is no longer in range.');
         connected = true;
         return device.gatt;
@@ -50,6 +52,7 @@ function fakeBand(bandId = 'HAB-001') {
       listeners.forEach((fn) => fn(event));
     },
     setFailConnect(value: boolean) { failConnect = value; },
+    hangConnect() { hang = true; },
   };
 }
 
@@ -131,11 +134,44 @@ describe('bandStore session state', () => {
     band.drop();
     await vi.advanceTimersByTimeAsync(2_000 + 4_000 + 8_000);
     expect(band.connectSpy).toHaveBeenCalledTimes(3);
-    expect(store.useBandStore.getState().status).toBe('reconnecting');
 
     band.setFailConnect(false);
     await vi.advanceTimersByTimeAsync(15_000);
     expect(store.useBandStore.getState().status).toBe('connected');
+  });
+
+  it('stops showing "Connecting..." after the grace period, but keeps retrying quietly', async () => {
+    const band = fakeBand();
+    const store = await loadStore(band);
+    await store.connectBandWithPicker();
+
+    band.setFailConnect(true);
+    band.drop();
+    expect(store.useBandStore.getState().status).toBe('reconnecting');
+    await vi.advanceTimersByTimeAsync(store.RECONNECT_UI_GRACE_MS);
+    expect(store.useBandStore.getState().status).toBe('disconnected');
+
+    // The band comes back: the background retry picks it up by itself.
+    band.setFailConnect(false);
+    await vi.advanceTimersByTimeAsync(15_000);
+    expect(store.useBandStore.getState().status).toBe('connected');
+  });
+
+  it('gives up on a connect that never answers (band off / out of range)', async () => {
+    const band = fakeBand();
+    const store = await loadStore(band);
+    await store.connectBandWithPicker();
+
+    band.hangConnect();
+    band.drop();
+    await vi.advanceTimersByTimeAsync(store.RECONNECT_UI_GRACE_MS);
+    expect(store.useBandStore.getState().status).toBe('disconnected');
+
+    // The hung attempt is abandoned after the connect timeout and retried.
+    const { BLE_CONNECT_TIMEOUT_MS } = await import('../services/bleService');
+    await vi.advanceTimersByTimeAsync(BLE_CONNECT_TIMEOUT_MS + 4_000);
+    expect(band.connectSpy.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(store.useBandStore.getState().status).toBe('disconnected');
   });
 
   it('sends immediately on a dropped link by reconnecting on demand', async () => {
