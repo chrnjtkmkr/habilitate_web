@@ -26,6 +26,8 @@ export type Database = {
           hrv: number | null
           spo2: number | null
           gsr: number
+          // Generated: sqrt(ax^2 + ay^2 + az^2), in g, ~1.0 at rest.
+          motion: number
           created_at: string
         }
         Insert: {
