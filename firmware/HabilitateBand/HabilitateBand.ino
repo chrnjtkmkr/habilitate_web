@@ -81,7 +81,7 @@
 // CONFIGURATION — edit these
 // ============================================================
 
-#define FIRMWARE_VERSION "0.5.0"
+#define FIRMWARE_VERSION "0.6.0"
 
 // Beat-detector trace (~3 lines/s plus one per beat). Keep 0 in normal
 // use: at that rate it pushes crash output out of the serial monitor.
@@ -693,15 +693,48 @@ struct BeatDetector {
 
 BeatDetector beat;
 
+// ---- Beat stream (HRV is computed in the database) ---------------------
+// Every measured interval goes to the server with the firmware's artifact
+// verdict. Postgres computes RMSSD from these (public.rmssd), so the rules
+// can be tuned and past sessions recomputed without reflashing. The
+// on-band RMSSD is still sent as "hrv" (stored as hrv_device) so the two
+// can be compared during validation.
+struct BeatEvent {
+  uint32_t seq;     // per boot, +1 per interval: a gap means beats were lost
+  uint32_t chain;   // +1 whenever the chain breaks: never pair across chains
+  uint32_t tMs;     // device time of the beat, ms since boot (millis() domain)
+  float    ibiMs;
+  bool     clean;   // passed the firmware's range and deviation checks
+};
+
+#define BEAT_QUEUE_SIZE  64   // ~40 s of beats, enough to ride out a reconnect
+#define BEATS_PER_PACKET 8
+
+BeatEvent beatQueue[BEAT_QUEUE_SIZE];   // loop() task only
+uint8_t   beatQueueHead  = 0;           // next slot to write
+uint8_t   beatQueueCount = 0;
+uint32_t  beatSeq        = 0;
+uint32_t  beatChain      = 0;
+uint32_t  bootId         = 0;           // random per boot; set in setup()
+
+void queueBeat(float ibi, bool clean, uint32_t tMs) {
+  beatQueue[beatQueueHead] = {beatSeq++, beatChain, tMs, ibi, clean};
+  beatQueueHead = (beatQueueHead + 1) % BEAT_QUEUE_SIZE;
+  // When full the oldest beat is overwritten; the seq gap tells the server.
+  if (beatQueueCount < BEAT_QUEUE_SIZE) beatQueueCount++;
+}
+
 void resetBeatChain() {
   beat.havePeak     = false;
   beat.prevIbiValid = false;
+  beatChain++;
 }
 
 void resetBeatDetector() {
   memset(&beat, 0, sizeof(beat));
   beat.trough      = INFINITY;
   beat.settleUntil = ppgSampleCount + PPG_SETTLE_SAMPLES;
+  beatChain++;
 }
 
 float medianOf(const float* values, uint8_t count) {
@@ -718,8 +751,9 @@ float medianOf(const float* values, uint8_t count) {
 }
 
 // Artifact rejection, then RMSSD bookkeeping. A successive difference is
-// only used when both of its intervals were clean and adjacent.
-void acceptInterval(float ibi) {
+// only used when both of its intervals were clean and adjacent. Every
+// interval, clean or not, is also queued for the server.
+void acceptInterval(float ibi, uint32_t beatTimeMs) {
   const char* verdict = "accepted";
   bool ok = ibi >= MIN_IBI_MS && ibi <= MAX_IBI_MS;
   float ref = 0.0f;
@@ -769,6 +803,8 @@ void acceptInterval(float ibi) {
 #else
   (void)verdict;
 #endif
+
+  queueBeat(ibi, ok, beatTimeMs);
 }
 
 // RMSSD in ms over the last RMSSD_PAIRS clean successive differences,
@@ -840,7 +876,13 @@ void detectBeat(uint32_t ir) {
       if (beat.havePeak) {
         const float ibi =
             ((float)(peakIdx - beat.lastPeakIdx) + (frac - beat.lastPeakFrac)) * PPG_SAMPLE_MS;
-        acceptInterval(ibi);
+        // The interval comes from the sample count (exact); the beat's
+        // timestamp is anchored to millis() so the server can line it up
+        // with telemetry rows, which the sensor's own clock would drift
+        // from over a session. Samples are read within ~20 ms of arrival.
+        const uint32_t beatTimeMs =
+            millis() - (uint32_t)lroundf(((float)(idx - peakIdx) - frac) * PPG_SAMPLE_MS);
+        acceptInterval(ibi, beatTimeMs);
       }
       beat.havePeak     = true;
       beat.lastPeakIdx  = peakIdx;
@@ -1390,6 +1432,7 @@ void onWsEvent(WStype_t type, uint8_t* payload, size_t /*length*/) {
       hello["reset"] = resetReasonName();
       hello["uptime_ms"] = millis();
       hello["boot_count"] = crumbs.bootCount;
+      hello["boot"] = bootId;
       if (previousBootSeen) {
         hello["prev_uptime_s"] = previousBoot.uptimeS;
         hello["prev_step"]     = loopStepName(previousBoot.step);
@@ -1736,7 +1779,10 @@ void sendSensorPacket() {
   JsonObject data = doc.createNestedObject("data");
   data["band_id"] = BAND_ID;
   data["seq"]     = sensorSeq++;
-  data["t"]       = (double)millis();
+  // Integer ms: ArduinoJson is built without doubles, and as a float this
+  // lost millisecond precision after ~4.6 h of uptime.
+  data["t"]       = (uint32_t)millis();
+  data["boot"]    = bootId;
   data["ax"]      = s.ax;
   data["ay"]      = s.ay;
   data["az"]      = s.az;
@@ -1747,8 +1793,28 @@ void sendSensorPacket() {
   data["hr"]      = s.hr;
   data["spo2"]    = s.spo2;
   data["gsr"]     = s.gsr;
-  // hrv omitted when there is not enough clean data; the server stores NULL
+  // On-band RMSSD, kept for comparison (stored as hrv_device); omitted
+  // when there is not enough clean data. The server computes hrv itself.
   if (s.hrv >= 0.0f) data["hrv"] = s.hrv;
+
+  // Beats since the last packet, oldest first:
+  //   [seq, chain, t_ms, ibi_ms, clean]
+  if (beatQueueCount > 0) {
+    JsonArray beats = data["beats"].to<JsonArray>();
+    const uint8_t n = beatQueueCount < BEATS_PER_PACKET ? beatQueueCount : BEATS_PER_PACKET;
+    for (uint8_t i = 0; i < n; i++) {
+      const uint8_t pos =
+          (beatQueueHead + BEAT_QUEUE_SIZE - beatQueueCount + i) % BEAT_QUEUE_SIZE;
+      const BeatEvent& e = beatQueue[pos];
+      JsonArray b = beats.add<JsonArray>();
+      b.add(e.seq);
+      b.add(e.chain);
+      b.add(e.tMs);
+      b.add(roundf(e.ibiMs * 10.0f) / 10.0f);  // 0.1 ms is plenty
+      b.add(e.clean ? 1 : 0);
+    }
+    beatQueueCount -= n;
+  }
 
   String json;
   serializeJson(doc, json);
@@ -1944,6 +2010,10 @@ void setup() {
   delay(500);
   Serial.println("[BOOT] HabilitateBand starting");
   readChipMac();
+  // Ties this boot's beats and telemetry together on the server; seq and
+  // chain counters restart at every boot.
+  bootId = esp_random();
+  if (bootId == 0) bootId = 1;
   startCrashCrumbs();
   startLoopWatchdog();
 

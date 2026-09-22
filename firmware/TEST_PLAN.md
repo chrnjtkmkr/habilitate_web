@@ -9,7 +9,7 @@ lines.
 Every recorded run must include the identity line printed at boot:
 
 ```
-[BOOT] HAB-001 firmware 0.5.0 mac 24:58:7C:XX:XX:XX
+[BOOT] HAB-001 firmware 0.6.0 mac 24:58:7C:XX:XX:XX
 [BOOT] Reset reason: POWERON
 [BOOT] Previous boot: no record (first boot after power-on)
 ```
@@ -180,11 +180,21 @@ jumping) so the comparison covers a raised heart rate too.
 
 ## H2. HRV reaches the database
 
+From firmware 0.6.0 the band sends every beat-to-beat interval, and
+Postgres computes `device_telemetry.hrv` from them (`public.rmssd`). The
+band's own figure is kept in `hrv_device` for comparison.
+
 1. Same still position as H1, for 2 minutes.
-2. Expect `hrv` to become non-NULL about 15–30 s after contact (it needs
-   10 clean beat-to-beat differences) and stay in a plausible range
+2. Expect rows in `device_beats` within a few seconds of contact (about
+   one per heartbeat), mostly `clean = true`.
+3. Expect `hrv` to become non-NULL about 15–30 s after contact (it needs
+   10 clean successive differences) and stay in a plausible range
    (adult at rest: roughly 20–100 ms).
-3. For a detailed check, flash with `#define DEBUG_HRV 1`: every beat
+4. `hrv` and `hrv_device` should agree within a few ms. Small
+   differences are expected (the database uses the median of the last
+   ~70 beats as its reference, the band the last 8); large ones must be
+   reported. I can run the comparison from the database for your times.
+5. For a detailed check, flash with `#define DEBUG_HRV 1`: every beat
    prints `[HRV-DBG] ibi ... accepted/rejected ...`. While still, at
    least 80% of beats should be accepted.
 
@@ -201,6 +211,21 @@ During normal streaming there must be no `[PPG] FIFO overflow` lines.
 One or two during a Wi-Fi scan or a reconnect are acceptable (the beat
 chain resets there, by design); regular ones mean the main loop is
 stalling and must be reported.
+
+## B1. Change and forget a band (dashboard)
+
+1. With a band connected, open Device settings. The band section shows
+   **Change band** and **Forget this band**.
+2. **Forget this band** → confirm. The card shows "Not connected".
+   Reload the page: it must not reconnect to that band on its own.
+3. **Set up a device** → **Connect via Bluetooth** → pick the band again.
+   It connects, and its Wi-Fi status is read fresh.
+4. **Change band**: the current band disconnects and the device picker
+   opens. Cancel it: the card shows "Not connected", and nothing
+   reconnects in the background.
+5. With a second band available (its own `BAND_ID`, see
+   PROVISIONING.md), repeat 4 and pick the second band. The card must
+   show its band ID, and after a reload only that band is restored.
 
 ## C6. Soak
 
