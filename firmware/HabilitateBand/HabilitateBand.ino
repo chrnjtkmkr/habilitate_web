@@ -81,7 +81,7 @@
 // CONFIGURATION — edit these
 // ============================================================
 
-#define FIRMWARE_VERSION "0.4.6"
+#define FIRMWARE_VERSION "0.5.0"
 
 // Beat-detector trace (~3 lines/s plus one per beat). Keep 0 in normal
 // use: at that rate it pushes crash output out of the serial monitor.
@@ -313,7 +313,7 @@ struct SensorReading {
   float gx, gy, gz;   // Gyroscope (dps)        — MPU6050
   float temp;          // Temperature (°C)       — STTS22H
   float hr;            // Heart rate (BPM)       — MAX30102, -1 if no finger
-  float hrv;           // HRV / not computed here (-1 always; DB trigger computes SDNN)
+  float hrv;           // RMSSD (ms) from clean beat intervals — -1 if not enough
   float spo2;          // SpO2 (%)               — MAX30102, -1 if no finger
   float gsr;           // GSR (raw ADC counts)   — GPIO1
 };
@@ -560,9 +560,40 @@ void updateTemperature() {
 // ============================================================
 
 MAX30105     particleSensor;
-bool         max30102Found = false;
+bool         max30102Found  = false;
+uint8_t      max30102PartId = 0;
+uint8_t      max30102RevId  = 0;
 
-// Analysis window
+// ---- Sampling ----------------------------------------------------------
+// 100 samples/s with no on-chip averaging. The old setting (8x averaging)
+// delivered 12.5 samples/s, so a beat could only be placed to within
+// 80 ms, while RMSSD in children is typically 30-80 ms; and the Maxim
+// HR/SpO2 routine, which assumes 25 samples/s, reported heart rate at
+// double its true value.
+#define PPG_SAMPLE_RATE_HZ 100
+#define PPG_SAMPLE_MS      (1000.0f / PPG_SAMPLE_RATE_HZ)
+#define PPG_DECIMATE       4      // 100 -> 25 samples/s for the Maxim routine
+
+// Every sample gets its time from its index (index x 10 ms), never from
+// millis() at read-out, so loop() latency cannot shift a beat. Samples
+// lost to FIFO overflow are counted in, keeping the time base aligned.
+uint32_t ppgSampleCount    = 0;
+uint32_t ppgOverflowTotal  = 0;
+
+// ---- Direct FIFO access ------------------------------------------------
+// The SparkFun driver buffers only 4 samples and silently overwrites the
+// rest, so at 100 samples/s any loop() stall over 40 ms lost data. The
+// FIFO (32 deep, 320 ms) is read here directly instead, and the chip's
+// overflow counter reports exactly when samples were lost.
+#define MAX3010X_I2C_ADDR    0x57
+#define MAX3010X_FIFO_WR_PTR 0x04
+#define MAX3010X_FIFO_OVF    0x05
+#define MAX3010X_FIFO_RD_PTR 0x06
+#define MAX3010X_FIFO_DATA   0x07
+#define PPG_BYTES_PER_SAMPLE 6     // Red + IR, 3 bytes each
+#define PPG_SAMPLES_PER_READ 21    // 126 bytes, fits the 128-byte Wire buffer
+
+// ---- Maxim HR/SpO2 analysis window (25 samples/s, 4 s) -----------------
 #define MAX_BUF_LEN      100
 #define SHIFT_AMOUNT      25
 #define HISTORY_SIZE       5
@@ -574,6 +605,9 @@ bool         max30102Found = false;
 uint32_t irBuffer[MAX_BUF_LEN];
 uint32_t redBuffer[MAX_BUF_LEN];
 int32_t  bufferIndex = 0;
+uint32_t decimIrSum  = 0;
+uint32_t decimRedSum = 0;
+uint8_t  decimCount  = 0;
 
 int32_t spo2Value      = -1;
 int8_t  spo2Valid      = 0;
@@ -598,34 +632,240 @@ unsigned long lastFingerSeenMs = 0;
 unsigned long lastValidReadingMs = 0;
 #define READING_STALE_MS 5000
 
-// ---- Beat-to-beat interval tracking (for HRV / RMSSD) ----
-#define IBI_HISTORY_SIZE   12
-#define MIN_IBI_MS         270
-#define MAX_IBI_MS         2000
-#define PEAK_THRESHOLD_FRAC 0.35f
+// ---- Beat detection (for HRV) ------------------------------------------
+// Filter corners at 100 samples/s. High-pass ~0.5 Hz removes the DC level
+// and slow drift; low-pass ~4.6 Hz removes noise while keeping the pulse.
+#define PPG_HP_ALPHA        0.97f
+#define PPG_LP_ALPHA        0.25f
+#define PPG_SETTLE_SAMPLES  200    // 2 s for the filters after contact
+#define PPG_REFRACTORY      30     // 300 ms: no two beats closer (200 bpm)
+#define PPG_REFRACTORY_FRAC 0.6f   // once a rhythm is known: nor sooner than 60% of it
+#define PPG_PEAK_FRACTION   0.5f   // of the running peak prominence
+#define PPG_REARM_FRACTION  0.3f   // signal must fall this far after a beat to re-arm
+#define PPG_BEAT_GAP_SAMPLES 250   // 2.5 s without a beat breaks the chain
 
-float         dcTracker        = 0.0f;
-float         acEnvelope       = 50.0f;
-float         prevAC1          = 0.0f;
-float         prevAC2          = 0.0f;
-unsigned long lastPeakMs       = 0;
-unsigned long ibiHistory[IBI_HISTORY_SIZE];
-int           ibiCount         = 0;
-unsigned long detectorStartMs  = 0;
-#define DC_SETTLE_MS 1000
+#define MIN_IBI_MS          300.0f  // 200 bpm
+#define MAX_IBI_MS          1500.0f // 40 bpm
+#define IBI_REF_SIZE        8       // accepted intervals kept as the reference
+#define IBI_MAX_DEVIATION   0.25f   // reject an interval >25% from the reference median
+#define IBI_RELEARN_AFTER   5       // consecutive rejections before the reference resets
+// Malik criterion: a successive difference counts only if under this
+// fraction of the reference. 0.20 slightly under-reads very strong
+// respiratory variation (-14% at +-90 ms in simulation) but keeps an
+// artifact from inflating RMSSD, which could hide a real HRV drop.
+#define IBI_MAX_SUCCESSIVE  0.20f
 
-// 4-tap moving-average pre-filter (reduces HF noise before analysis)
-uint32_t irTaps[4]  = {0, 0, 0, 0};
-uint32_t redTaps[4] = {0, 0, 0, 0};
-int      tapIdx     = 0;
+#define RMSSD_PAIRS         30      // successive differences in the RMSSD window
+#define RMSSD_MIN_PAIRS     10      // fewer than this: no HRV reported
+#define RMSSD_STALE_MS      5000    // no clean beat for this long: no HRV reported
+
+struct BeatDetector {
+  // Filters
+  bool     primed;
+  float    hpPrevIn;
+  float    hpOut;
+  float    lpOut;
+  uint32_t settleUntil;     // sample index before which no beats are taken
+  // Peak search on the inverted, filtered signal (systole = positive peak).
+  // Peaks are judged by prominence, their height above the lowest point
+  // since the previous beat, so slow baseline wander (breathing, arm
+  // position) can neither hide a beat nor fake one.
+  float    y1, y2;          // previous two filtered samples
+  bool     armed;           // signal fell far enough after the last beat
+  float    trough;          // lowest value since the last beat
+  float    lastPeakVal;
+  float    peakAmp;         // running average prominence of accepted peaks
+  float    settleMax;       // largest prominence during settling seeds peakAmp
+  // Beat chain
+  bool     havePeak;
+  uint32_t lastPeakIdx;
+  float    lastPeakFrac;
+  // Interval reference and RMSSD
+  float    ibiRef[IBI_REF_SIZE];
+  uint8_t  ibiRefCount, ibiRefPos;
+  uint8_t  consecutiveRejects;
+  bool     prevIbiValid;
+  float    prevIbi;
+  float    diffSq[RMSSD_PAIRS];
+  uint8_t  diffCount, diffPos;
+  unsigned long lastAcceptedMs;
+};
+
+BeatDetector beat;
+
+void resetBeatChain() {
+  beat.havePeak     = false;
+  beat.prevIbiValid = false;
+}
+
+void resetBeatDetector() {
+  memset(&beat, 0, sizeof(beat));
+  beat.trough      = INFINITY;
+  beat.settleUntil = ppgSampleCount + PPG_SETTLE_SAMPLES;
+}
+
+float medianOf(const float* values, uint8_t count) {
+  float sorted[IBI_REF_SIZE];
+  for (uint8_t i = 0; i < count; i++) sorted[i] = values[i];
+  for (uint8_t i = 1; i < count; i++) {
+    const float key = sorted[i];
+    int j = i - 1;
+    while (j >= 0 && sorted[j] > key) { sorted[j + 1] = sorted[j]; j--; }
+    sorted[j + 1] = key;
+  }
+  return (count % 2) ? sorted[count / 2]
+                     : 0.5f * (sorted[count / 2 - 1] + sorted[count / 2]);
+}
+
+// Artifact rejection, then RMSSD bookkeeping. A successive difference is
+// only used when both of its intervals were clean and adjacent.
+void acceptInterval(float ibi) {
+  const char* verdict = "accepted";
+  bool ok = ibi >= MIN_IBI_MS && ibi <= MAX_IBI_MS;
+  float ref = 0.0f;
+  if (!ok) {
+    verdict = "rejected: out of range";
+  } else if (beat.ibiRefCount >= 3) {
+    ref = medianOf(beat.ibiRef, beat.ibiRefCount);
+    if (fabsf(ibi - ref) > IBI_MAX_DEVIATION * ref) {
+      ok = false;
+      verdict = "rejected: >25% from reference";
+    }
+  }
+
+  if (!ok) {
+    beat.prevIbiValid = false;
+    // A run of rejections means the reference is stale (heart rate
+    // really changed), not that every beat is an artifact: relearn.
+    if (++beat.consecutiveRejects >= IBI_RELEARN_AFTER) {
+      beat.ibiRefCount = 0;
+      beat.ibiRefPos = 0;
+      beat.consecutiveRejects = 0;
+    }
+  } else {
+    beat.consecutiveRejects = 0;
+    beat.ibiRef[beat.ibiRefPos] = ibi;
+    beat.ibiRefPos = (beat.ibiRefPos + 1) % IBI_REF_SIZE;
+    if (beat.ibiRefCount < IBI_REF_SIZE) beat.ibiRefCount++;
+
+    // Differences only once the reference has settled on a rhythm, and
+    // only if plausible (Malik criterion, IBI_MAX_SUCCESSIVE).
+    if (beat.prevIbiValid && beat.ibiRefCount >= 3) {
+      const float d = ibi - beat.prevIbi;
+      if (fabsf(d) <= IBI_MAX_SUCCESSIVE * medianOf(beat.ibiRef, beat.ibiRefCount)) {
+        beat.diffSq[beat.diffPos] = d * d;
+        beat.diffPos = (beat.diffPos + 1) % RMSSD_PAIRS;
+        if (beat.diffCount < RMSSD_PAIRS) beat.diffCount++;
+      }
+    }
+    beat.prevIbi = ibi;
+    beat.prevIbiValid = true;
+    beat.lastAcceptedMs = millis();
+  }
+
+#if DEBUG_HRV
+  Serial.printf("[HRV-DBG] ibi %.1f ms %s (ref %.0f) pairs %u rmssd %.1f\n",
+                ibi, verdict, ref, beat.diffCount, computeRMSSD());
+#else
+  (void)verdict;
+#endif
+}
+
+// RMSSD in ms over the last RMSSD_PAIRS clean successive differences,
+// or -1 when there is not enough recent clean data.
+float computeRMSSD() {
+  if (beat.diffCount < RMSSD_MIN_PAIRS) return -1.0f;
+  if (millis() - beat.lastAcceptedMs > RMSSD_STALE_MS) return -1.0f;
+  double sum = 0.0;
+  for (uint8_t i = 0; i < beat.diffCount; i++) sum += beat.diffSq[i];
+  return sqrtf((float)(sum / beat.diffCount));
+}
+
+void detectBeat(uint32_t ir) {
+  const uint32_t idx = ppgSampleCount;  // index of this sample
+  const float x = (float)ir;
+
+  if (!beat.primed) {
+    beat.primed   = true;
+    beat.hpPrevIn = x;                  // no step response on the first sample
+  }
+  beat.hpOut    = PPG_HP_ALPHA * (beat.hpOut + x - beat.hpPrevIn);
+  beat.hpPrevIn = x;
+  beat.lpOut   += PPG_LP_ALPHA * (beat.hpOut - beat.lpOut);
+  // More blood absorbs more IR, so systole is a dip in the raw signal.
+  const float y0 = -beat.lpOut;
+
+  const bool settling = (int32_t)(idx - beat.settleUntil) < 0;
+  const bool localMax = beat.y1 > beat.y2 && beat.y1 >= y0;
+  const uint32_t peakIdx = idx - 1;     // the candidate is the previous sample
+
+  if (beat.y1 < beat.trough) beat.trough = beat.y1;
+  const float prominence = beat.y1 - beat.trough;
+  if (!beat.havePeak || beat.lastPeakVal - beat.trough > PPG_REARM_FRACTION * beat.peakAmp) {
+    beat.armed = true;
+  }
+
+  if (settling) {
+    if (localMax && prominence > beat.settleMax) beat.settleMax = prominence;
+  } else {
+    if (beat.peakAmp <= 0.0f) beat.peakAmp = beat.settleMax;
+
+    // Lost the pulse for a while: forget the old amplitude and chain.
+    if (beat.havePeak && peakIdx - beat.lastPeakIdx > PPG_BEAT_GAP_SAMPLES) {
+      resetBeatChain();
+      beat.peakAmp *= 0.5f;
+    }
+
+    // Once a rhythm is known, a beat sooner than 60% of it is noise or
+    // the dicrotic notch, not a heartbeat.
+    float refractory = PPG_REFRACTORY;
+    if (beat.ibiRefCount >= 3) {
+      const float adaptive =
+          PPG_REFRACTORY_FRAC * medianOf(beat.ibiRef, beat.ibiRefCount) / PPG_SAMPLE_MS;
+      if (adaptive > refractory) refractory = adaptive;
+    }
+
+    const bool tallEnough = prominence > PPG_PEAK_FRACTION * beat.peakAmp;
+    const bool pastRefractory =
+        !beat.havePeak || (float)(peakIdx - beat.lastPeakIdx) >= refractory;
+
+    if (localMax && beat.armed && tallEnough && pastRefractory) {
+      // Parabolic interpolation: places the peak between samples,
+      // to about 1 ms instead of the 10 ms sample spacing.
+      const float denom = beat.y2 - 2.0f * beat.y1 + y0;
+      float frac = (denom < 0.0f) ? 0.5f * (beat.y2 - y0) / denom : 0.0f;
+      if (frac > 0.5f)  frac = 0.5f;
+      if (frac < -0.5f) frac = -0.5f;
+
+      if (beat.havePeak) {
+        const float ibi =
+            ((float)(peakIdx - beat.lastPeakIdx) + (frac - beat.lastPeakFrac)) * PPG_SAMPLE_MS;
+        acceptInterval(ibi);
+      }
+      beat.havePeak     = true;
+      beat.lastPeakIdx  = peakIdx;
+      beat.lastPeakFrac = frac;
+      beat.armed        = false;
+      beat.peakAmp     += 0.125f * (prominence - beat.peakAmp);
+      beat.lastPeakVal  = beat.y1;
+      beat.trough       = beat.y1;
+    }
+  }
+
+  beat.y2 = beat.y1;
+  beat.y1 = y0;
+}
 
 bool initMAX30102() {
   if (!particleSensor.begin(Wire, I2C_SPEED_FAST)) return false;
 
+  max30102PartId = particleSensor.readPartID();
+  max30102RevId  = particleSensor.getRevisionID();
+
   byte ledBrightness = 0x3F;  // tuned for finger tissue penetration
-  byte sampleAverage  = 8;    // hardware averaging
+  byte sampleAverage  = 1;    // no on-chip averaging (see PPG_SAMPLE_RATE_HZ)
   byte ledMode        = 2;    // Red + IR (SpO2 mode)
-  int  sampleRate     = 100;  // Hz
+  int  sampleRate     = PPG_SAMPLE_RATE_HZ;
   int  pulseWidth     = 411;  // µs → 18-bit ADC
   int  adcRange       = 16384;
 
@@ -635,6 +875,7 @@ bool initMAX30102() {
   particleSensor.setPulseAmplitudeIR(ledBrightness);
 
   bufferIndex = 0;
+  resetBeatDetector();
   return true;
 }
 
@@ -661,87 +902,6 @@ int medianOfHistory(int* arr, int count) {
     sorted[j+1] = key;
   }
   return sorted[count / 2];
-}
-
-// ============================================================
-// PULSE PEAK DETECTION (for HRV)
-// ============================================================
-
-void resetPulseDetector() {
-  dcTracker      = 0.0f;
-  acEnvelope     = 50.0f;
-  prevAC1        = 0.0f;
-  prevAC2        = 0.0f;
-  lastPeakMs     = 0;
-  ibiCount       = 0;
-  detectorStartMs = millis();
-}
-
-void detectPulsePeak(float irFiltered, unsigned long nowMs) {
-  // Fast-lock the baseline for the first second after reset (so a fresh
-  // finger-contact jump doesn't take 4-8+ seconds to settle), then
-  // slow down to preserve the actual heartbeat waveform for detection.
-  bool settling = (nowMs - detectorStartMs) < DC_SETTLE_MS;
-  const float DC_ALPHA = settling ? 0.3f : 0.02f;
-  if (dcTracker == 0.0f) dcTracker = irFiltered;
-  dcTracker += DC_ALPHA * (irFiltered - dcTracker);
-
-  float ac = irFiltered - dcTracker;
-
-  float absAc = fabsf(ac);
-  const float ENV_DECAY = 0.995f;
-  const float MAX_AC_ENVELOPE = 500.0f;  // cap so one motion spike can't blind detection for 60-90+ seconds
-  acEnvelope = (absAc > acEnvelope) ? absAc : (acEnvelope * ENV_DECAY);
-  if (acEnvelope < 10.0f)  acEnvelope = 10.0f;
-  if (acEnvelope > MAX_AC_ENVELOPE) acEnvelope = MAX_AC_ENVELOPE;
-
-  bool isLocalMax = (prevAC1 > prevAC2) && (prevAC1 > ac);
-  bool isBigEnough = prevAC1 > (acEnvelope * PEAK_THRESHOLD_FRAC);
-
-#if DEBUG_HRV
-  static unsigned long lastDebugMs = 0;
-  if (nowMs - lastDebugMs >= 300) {
-    lastDebugMs = nowMs;
-    Serial.printf("[HRV-DBG] ac=%.1f prevAC1=%.1f env=%.1f thresh=%.1f localMax=%d bigEnough=%d ibiCount=%d\n",
-                  ac, prevAC1, acEnvelope, acEnvelope * PEAK_THRESHOLD_FRAC,
-                  isLocalMax, isBigEnough, ibiCount);
-  }
-#endif
-
-  if (isLocalMax && isBigEnough) {
-    if (lastPeakMs > 0) {
-      unsigned long ibi = nowMs - lastPeakMs;
-#if DEBUG_HRV
-      Serial.printf("[HRV-DBG] PEAK FOUND: ibi=%lu ms (valid range %d-%d)\n", ibi, MIN_IBI_MS, MAX_IBI_MS);
-#endif
-      if (ibi >= MIN_IBI_MS && ibi <= MAX_IBI_MS) {
-        if (ibiCount >= IBI_HISTORY_SIZE) {
-          for (int i = 0; i < IBI_HISTORY_SIZE - 1; i++) {
-            ibiHistory[i] = ibiHistory[i + 1];
-          }
-          ibiHistory[IBI_HISTORY_SIZE - 1] = ibi;
-        } else {
-          ibiHistory[ibiCount++] = ibi;
-        }
-      }
-    }
-    lastPeakMs = nowMs;
-  }
-
-  prevAC2 = prevAC1;
-  prevAC1 = ac;
-}
-
-float computeRMSSD() {
-  if (ibiCount < 4) return -1.0f;
-  double sumSq = 0;
-  int n = 0;
-  for (int i = 1; i < ibiCount; i++) {
-    float d = (float)ibiHistory[i] - (float)ibiHistory[i - 1];
-    sumSq += (double)d * d;
-    n++;
-  }
-  return (n > 0) ? sqrtf((float)(sumSq / n)) : -1.0f;
 }
 
 void processBuffer() {
@@ -788,76 +948,111 @@ void processBuffer() {
   if (spo2Cand > 0) { lastValidSpO2 = spo2Cand; currentSpO2 = lastValidSpO2; }
 }
 
+// One 100 samples/s sample: finger detection, beat detection, and 4:1
+// decimation into the Maxim routine's 25 samples/s window.
+void handlePpgSample(uint32_t redRaw, uint32_t irRaw) {
+  ppgSampleCount++;
+  const unsigned long now = millis();
+
+  // Adaptive finger detection (on the raw sample). The ambient baseline
+  // adapts over ~1.3 s, as it did at the old 12.5 samples/s.
+  const bool hasFinger = irRaw > ambientIR + FINGER_MARGIN;
+  if (hasFinger) {
+    lastFingerSeenMs = now;
+  } else {
+    ambientIR = (ambientIR * 127 + irRaw) / 128;
+  }
+
+  if (hasFinger && !fingerPresent) {
+    fingerPresent = true;
+    bufferIndex = historyCount = historyIndex = 0;
+    decimIrSum = decimRedSum = decimCount = 0;
+    resetBeatDetector();
+  }
+
+  if (!hasFinger && fingerPresent && now - lastFingerSeenMs >= NO_FINGER_HOLD_MS) {
+    fingerPresent  = false;
+    currentHR      = lastValidHR   = -1;
+    currentSpO2    = lastValidSpO2 = -1;
+    bufferIndex    = historyCount  = 0;
+    resetBeatDetector();
+  }
+
+  if (!fingerPresent) return;
+
+  // No good-quality reading for a while: show no value rather than a
+  // frozen old one. HRV has its own staleness check (RMSSD_STALE_MS).
+  if (lastValidReadingMs > 0 && now - lastValidReadingMs > READING_STALE_MS) {
+    currentHR   = lastValidHR   = -1;
+    currentSpO2 = lastValidSpO2 = -1;
+  }
+
+  detectBeat(irRaw);
+
+  decimIrSum  += irRaw;
+  decimRedSum += redRaw;
+  if (++decimCount < PPG_DECIMATE) return;
+
+  irBuffer [bufferIndex] = decimIrSum  / PPG_DECIMATE;
+  redBuffer[bufferIndex] = decimRedSum / PPG_DECIMATE;
+  decimIrSum = decimRedSum = decimCount = 0;
+  bufferIndex++;
+
+  if (bufferIndex >= MAX_BUF_LEN) {
+    processBuffer();
+    // Sliding window — keep the last (MAX_BUF_LEN - SHIFT_AMOUNT) samples
+    for (int i = 0; i < MAX_BUF_LEN - SHIFT_AMOUNT; i++) {
+      irBuffer [i] = irBuffer [i + SHIFT_AMOUNT];
+      redBuffer[i] = redBuffer[i + SHIFT_AMOUNT];
+    }
+    bufferIndex = MAX_BUF_LEN - SHIFT_AMOUNT;
+  }
+}
+
+// Reads every sample waiting in the sensor FIFO, oldest first.
 void updateMAX30102() {
   if (!max30102Found) return;
-  particleSensor.check();
 
-  while (particleSensor.available()) {
-    uint32_t irRaw  = particleSensor.getFIFOIR();
-    uint32_t redRaw = particleSensor.getFIFORed();
-    particleSensor.nextSample();
+  const uint8_t lost = particleSensor.readRegister8(MAX3010X_I2C_ADDR, MAX3010X_FIFO_OVF);
+  const uint8_t wr   = particleSensor.readRegister8(MAX3010X_I2C_ADDR, MAX3010X_FIFO_WR_PTR);
+  const uint8_t rd   = particleSensor.readRegister8(MAX3010X_I2C_ADDR, MAX3010X_FIFO_RD_PTR);
+  int pending = (wr - rd) & 0x1F;
+  if (pending == 0 && lost > 0) pending = 32;   // full: the pointers have met
 
-    unsigned long now = millis();
-
-    // Adaptive finger detection (on raw sample, before filtering)
-    uint32_t threshold = ambientIR + FINGER_MARGIN;
-    bool     hasFinger = irRaw > threshold;
-
-    if (hasFinger) {
-      lastFingerSeenMs = now;
-    } else {
-      ambientIR = (ambientIR * 15 + irRaw) / 16; // slow adaptive baseline
+  if (lost > 0) {
+    // The overwritten samples came before the ones still in the FIFO.
+    // Count their time in, and never measure an interval across the gap.
+    ppgSampleCount   += lost;
+    ppgOverflowTotal += lost;
+    resetBeatChain();
+    static unsigned long lastOverflowLogMs = 0;
+    if (millis() - lastOverflowLogMs > 10000) {
+      lastOverflowLogMs = millis();
+      Serial.printf("[PPG] FIFO overflow: %u samples lost (total %lu); loop() stalled > 320 ms\n",
+                    lost, (unsigned long)ppgOverflowTotal);
     }
+  }
 
-    if (hasFinger && !fingerPresent) {
-      fingerPresent = true;
-      bufferIndex = historyCount = historyIndex = 0;
-      resetPulseDetector();
+  while (pending > 0) {
+    const int batch = pending > PPG_SAMPLES_PER_READ ? PPG_SAMPLES_PER_READ : pending;
+    Wire.beginTransmission(MAX3010X_I2C_ADDR);
+    Wire.write(MAX3010X_FIFO_DATA);
+    if (Wire.endTransmission() != 0) return;          // bus error: next loop retries
+    const uint8_t bytes = batch * PPG_BYTES_PER_SAMPLE;
+    if (Wire.requestFrom((uint8_t)MAX3010X_I2C_ADDR, bytes) != bytes) return;
+
+    for (int i = 0; i < batch; i++) {
+      // Separate reads: the order of evaluation inside one expression
+      // is unspecified in C++.
+      uint32_t red = (uint32_t)Wire.read() << 16;
+      red |= (uint32_t)Wire.read() << 8;
+      red |= (uint32_t)Wire.read();
+      uint32_t ir = (uint32_t)Wire.read() << 16;
+      ir |= (uint32_t)Wire.read() << 8;
+      ir |= (uint32_t)Wire.read();
+      handlePpgSample(red & 0x3FFFF, ir & 0x3FFFF);
     }
-
-    if (!hasFinger && fingerPresent) {
-      if (now - lastFingerSeenMs >= NO_FINGER_HOLD_MS) {
-        fingerPresent  = false;
-        currentHR      = lastValidHR   = -1;
-        currentSpO2    = lastValidSpO2 = -1;
-        bufferIndex    = historyCount  = 0;
-        resetPulseDetector();
-      }
-    }
-
-    if (!fingerPresent) continue;
-
-    // If we haven't had a good-quality reading in a while, treat as
-    // stale rather than continuing to show a frozen old value.
-    if (lastValidReadingMs > 0 && now - lastValidReadingMs > READING_STALE_MS) {
-      currentHR   = lastValidHR   = -1;
-      currentSpO2 = lastValidSpO2 = -1;
-      resetPulseDetector();
-    }
-
-    // 4-tap moving-average filter
-    irTaps [tapIdx] = irRaw;
-    redTaps[tapIdx] = redRaw;
-    tapIdx = (tapIdx + 1) % 4;
-
-    uint32_t irF  = (irTaps[0]  + irTaps[1]  + irTaps[2]  + irTaps[3])  / 4;
-    uint32_t redF = (redTaps[0] + redTaps[1] + redTaps[2] + redTaps[3]) / 4;
-
-    detectPulsePeak((float)irF, now);
-
-    irBuffer [bufferIndex] = irF;
-    redBuffer[bufferIndex] = redF;
-    bufferIndex++;
-
-    if (bufferIndex >= MAX_BUF_LEN) {
-      processBuffer();
-      // Sliding window — keep the last (MAX_BUF_LEN - SHIFT_AMOUNT) samples
-      for (int i = 0; i < MAX_BUF_LEN - SHIFT_AMOUNT; i++) {
-        irBuffer [i] = irBuffer [i + SHIFT_AMOUNT];
-        redBuffer[i] = redBuffer[i + SHIFT_AMOUNT];
-      }
-      bufferIndex = MAX_BUF_LEN - SHIFT_AMOUNT;
-    }
+    pending -= batch;
   }
 }
 
@@ -885,7 +1080,9 @@ SensorReading readSensors() {
   r.hr   = (float)currentHR;          // MAX30102 — -1 if no finger
   r.spo2 = (float)currentSpO2;        // MAX30102 — -1 if no finger
   r.gsr  = (float)readGSR();
-  r.hrv  = (fingerPresent && currentHR > 0) ? computeRMSSD() : -1.0f;  // RMSSD from real beat-to-beat intervals
+  // Independent of hr: HRV comes from the beat detector, HR from the Maxim
+  // routine, and one can be valid while the other is not.
+  r.hrv  = fingerPresent ? computeRMSSD() : -1.0f;
 
   return r;
 }
@@ -1550,7 +1747,7 @@ void sendSensorPacket() {
   data["hr"]      = s.hr;
   data["spo2"]    = s.spo2;
   data["gsr"]     = s.gsr;
-  // hrv omitted when -1 so the DB trigger can compute SDNN instead
+  // hrv omitted when there is not enough clean data; the server stores NULL
   if (s.hrv >= 0.0f) data["hrv"] = s.hrv;
 
   String json;
@@ -1722,6 +1919,15 @@ void startLoopWatchdog() {
   enableLoopWDT();  // the core resets it after every loop() iteration
 }
 
+// Reads one register; -1 if the device does not answer.
+int readI2cByte(uint8_t addr, uint8_t reg) {
+  Wire.beginTransmission(addr);
+  Wire.write(reg);
+  if (Wire.endTransmission() != 0) return -1;
+  if (Wire.requestFrom(addr, (uint8_t)1) != 1) return -1;
+  return Wire.read();
+}
+
 void readChipMac() {
   uint8_t mac[6];
   if (esp_efuse_mac_get_default(mac) != ESP_OK) return;
@@ -1796,6 +2002,14 @@ void setup() {
                 mpuFound ? "OK" : "MISSING",
                 sttsFound ? "OK" : "MISSING",
                 max30102Found ? "OK" : "MISSING");
+  // Identity registers, so the fitted parts can be confirmed from a log:
+  //   pulse part ID 0x15 = MAX30102/MAX30105 (a MAX30100 reads 0x11)
+  //   temperature WHO_AM_I 0xA0 = STTS22H
+  //   motion WHO_AM_I 0x68 = MPU-6050 (0x70 MPU-6500, 0x71 MPU-9250)
+  Serial.printf("[BOOT] Chip IDs: pulse part 0x%02X rev 0x%02X, temp WHO_AM_I 0x%02X, motion WHO_AM_I 0x%02X\n",
+                max30102PartId, max30102RevId,
+                readI2cByte(STTS22H_ADDRESS_FIFTEEN, 0x01) & 0xFF,
+                readI2cByte(MPU_ADDR, 0x75) & 0xFF);
   Serial.println("[BOOT] BLE ready; Wi-Fi/WSS pipeline running");
 }
 

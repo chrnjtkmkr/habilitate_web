@@ -9,10 +9,22 @@ lines.
 Every recorded run must include the identity line printed at boot:
 
 ```
-[BOOT] HAB-001 firmware 0.4.6 mac 24:58:7C:XX:XX:XX
+[BOOT] HAB-001 firmware 0.5.0 mac 24:58:7C:XX:XX:XX
 [BOOT] Reset reason: POWERON
 [BOOT] Previous boot: no record (first boot after power-on)
 ```
+
+Also record the chip line printed a few lines later. It confirms the
+parts actually fitted:
+
+```
+[BOOT] Chip IDs: pulse part 0x15 rev 0x03, temp WHO_AM_I 0xA0, motion WHO_AM_I 0x68
+```
+
+Pulse part `0x15` = MAX30102/MAX30105 (a MAX30100 would read `0x11` and
+the firmware would report it MISSING). Temp `0xA0` = STTS22H. Motion
+`0x68` = MPU-6050 (`0x70` = MPU-6500, `0x71` = MPU-9250; other values
+mean a clone, which is worth knowing for the noise figures).
 
 After any restart that was not a power cycle, the third line instead
 reads e.g. `Previous boot: ran 289 s, last step websocket, network
@@ -150,6 +162,45 @@ a PSK guest/IoT SSID, or a phone hotspot.
 While the band is retrying a bad network (C2 step 1), scan from the
 dashboard. The network list must appear (no `SCAN_FAILED`), and the
 retries resume afterwards.
+
+## H1. Heart rate against a pulse oximeter (required before HRV is "done")
+
+Firmware 0.5.0 feeds the HR/SpO2 routine the 25 samples/s it was
+written for; earlier versions fed it 12.5, which doubles the HR.
+
+1. Clip a pulse oximeter on one finger and place a finger of the other
+   hand (or the wrist, as worn) on the band's sensor. Sit still.
+2. After 30 s, note the time and both readings every 15 s for 2 minutes.
+3. Send me the times. I compare them with `device_telemetry.hr` for the
+   same seconds.
+
+Pass: after the first 30 s, the band is within ±5 bpm of the oximeter at
+every reading. Repeat once after 1 minute of brisk movement (stairs,
+jumping) so the comparison covers a raised heart rate too.
+
+## H2. HRV reaches the database
+
+1. Same still position as H1, for 2 minutes.
+2. Expect `hrv` to become non-NULL about 15–30 s after contact (it needs
+   10 clean beat-to-beat differences) and stay in a plausible range
+   (adult at rest: roughly 20–100 ms).
+3. For a detailed check, flash with `#define DEBUG_HRV 1`: every beat
+   prints `[HRV-DBG] ibi ... accepted/rejected ...`. While still, at
+   least 80% of beats should be accepted.
+
+## H3. Movement does not fake HRV
+
+1. With HRV showing, wave the hand for 10 s, then hold still again.
+2. Expect rejections during the movement (with DEBUG_HRV) and `hrv`
+   either unchanged or NULL, never a spike. It must recover within
+   about 30 s of holding still.
+
+## H4. No lost samples
+
+During normal streaming there must be no `[PPG] FIFO overflow` lines.
+One or two during a Wi-Fi scan or a reconnect are acceptable (the beat
+chain resets there, by design); regular ones mean the main loop is
+stalling and must be reported.
 
 ## C6. Soak
 
