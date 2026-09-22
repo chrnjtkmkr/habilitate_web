@@ -115,7 +115,6 @@ The main tables involved:
 - Secrets go in `secrets.h`, a `.env` file or the Supabase dashboard, never in code, docs or chat messages.
 - If a secret is ever pasted somewhere public, rotate it. Deleting the message is not enough.
 - The dashboard only ever needs the **URL** and the **anon key**. If anything asks you to put the **service role key** into the dashboard, don't.
-- **Caution:** the root folder contains `auto-commit.ps1` / `start-auto-commit.bat`. When running, it commits and pushes every change to GitHub automatically. It relies on `.gitignore` to keep secrets out. Before starting it, check that any new secret file is covered by `.gitignore`.
 
 ---
 
@@ -138,7 +137,6 @@ The main tables involved:
   - `public/`: images and icons.
   - Build and test settings: `vite.config.ts`, `vitest*.ts`, `tsconfig*.json`, `tailwind.config.js`.
   - `.env.example`: the template for the two public settings.
-  - `vercel.json` is left over from an earlier hosting plan; there is no live Vercel deployment.
 - **Why it's structured this way:**
   - Separating screens, building blocks and logic keeps each file small and testable.
   - All on-screen wording lives in the English and Hindi files, so nothing is hard-coded in one language.
@@ -203,9 +201,7 @@ The main tables involved:
 | `README.md` | Short project introduction and setup steps. |
 | `CLAUDE.md` | Working rules for the AI coding assistant: production boundaries, non-negotiables such as "no raw video or audio ever leaves the browser", and the stack. |
 | `PROJECT_OVERVIEW.md` | This document. |
-| `DEPLOY.md` | Older deployment notes. **Out of date; don't follow it.** |
 | `package.json` / `package-lock.json` | Installs the Supabase command-line tool for the whole repo. |
-| `auto-commit.ps1` / `start-auto-commit.bat` | Optional watcher that auto-commits and pushes changes to GitHub (see the caution in section 2). |
 | `.gitignore` | The list of files git must never save: secrets, `.env` files, build output, installed packages. |
 
 **Why everything is laid out like this:** each top-level folder is one part of the system (dashboard, backend, band, and so on). Someone working on one part only needs to look in one place. Earlier there were two partial copies of the project; they were merged into this single layout so there is exactly one source of truth.
