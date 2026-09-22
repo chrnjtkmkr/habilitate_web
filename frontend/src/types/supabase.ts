@@ -9,6 +9,60 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      band_seconds: {
+        Row: {
+          id: number
+          band_id: string
+          boot_id: number
+          device_second: number
+          second_at: string
+          packets: number
+          gsr: number | null
+          temp: number | null
+          motion_energy: number | null
+          hr: number | null
+          hrv: number | null
+          gyro_sd: number | null
+          flap_hz: number | null
+          flapping: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: never
+          band_id: string
+          boot_id: number
+          device_second: number
+          second_at: string
+          packets: number
+          gsr?: number | null
+          temp?: number | null
+          motion_energy?: number | null
+          hr?: number | null
+          hrv?: number | null
+          gyro_sd?: number | null
+          flap_hz?: number | null
+          flapping?: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: never
+          band_id?: string
+          boot_id?: number
+          device_second?: number
+          second_at?: string
+          packets?: number
+          gsr?: number | null
+          temp?: number | null
+          motion_energy?: number | null
+          hr?: number | null
+          hrv?: number | null
+          gyro_sd?: number | null
+          flap_hz?: number | null
+          flapping?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
       device_beats: {
         Row: {
           id: number
@@ -67,6 +121,7 @@ export type Database = {
           created_at: string
           boot_id: number | null
           hrv_device: number | null
+          sample_at: string | null
         }
         Insert: {
           id?: string
@@ -87,6 +142,7 @@ export type Database = {
           created_at?: string
           boot_id?: number | null
           hrv_device?: number | null
+          sample_at?: string | null
         }
         Update: {
           id?: string
@@ -107,6 +163,7 @@ export type Database = {
           created_at?: string
           boot_id?: number | null
           hrv_device?: number | null
+          sample_at?: string | null
         }
         Relationships: []
       }

@@ -888,5 +888,12 @@
   "band_forget": "Forget this band",
   "band_forget_confirm": "Forget {{band}}? It will disconnect, and to use it again you will need to pick it from the device list.",
   "band_forget_confirm_button": "Forget band",
-  "band_cancel": "Cancel"
+  "band_cancel": "Cancel",
+  "band_state_label": "Band",
+  "band_state_no_data": "no live data",
+  "band_state_establishing": "learning this child’s baseline ({{seconds}} of {{total}} s)",
+  "band_state_insufficient": "not enough reliable signals",
+  "band_state_withheld": "live, state withheld until clinically validated",
+  "band_state_flapping": "Flapping",
+  "band_state_debug_provisional": "Provisional, not clinically validated"
 }

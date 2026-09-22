@@ -840,5 +840,12 @@
   "band_forget": "इस बैंड को हटाएँ",
   "band_forget_confirm": "{{band}} को हटाएँ? यह डिस्कनेक्ट हो जाएगा, और इसे फिर से इस्तेमाल करने के लिए डिवाइस सूची से चुनना होगा।",
   "band_forget_confirm_button": "बैंड हटाएँ",
-  "band_cancel": "रद्द करें"
+  "band_cancel": "रद्द करें",
+  "band_state_label": "बैंड",
+  "band_state_no_data": "कोई लाइव डेटा नहीं",
+  "band_state_establishing": "इस बच्चे का सामान्य स्तर सीख रहा है ({{total}} में से {{seconds}} सेकंड)",
+  "band_state_insufficient": "पर्याप्त भरोसेमंद संकेत नहीं",
+  "band_state_withheld": "लाइव, क्लिनिकल पुष्टि तक स्थिति नहीं दिखाई जाती",
+  "band_state_flapping": "हाथ फड़फड़ाना",
+  "band_state_debug_provisional": "अस्थायी, क्लिनिकल रूप से पुष्ट नहीं"
 }

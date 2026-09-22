@@ -26,7 +26,14 @@ import { getDomainIcon, getSimplifiedGoal, getHelpLadder, pickField, pickArrayFi
 import { useActivityLookup } from '../lib/queries/activities';
 import ActivityPicker from '../components/ActivityPicker';
 import DeviceSetupCard from '../components/device/DeviceSetupCard';
-import { connectBandWithPicker, sendBandSessionState } from '../lib/bandStore';
+import {
+  connectBandWithPicker,
+  getRememberedBandId,
+  sendBandSessionState,
+  useBandStore,
+} from '../lib/bandStore';
+import { useChildState } from '../hooks/useChildState';
+import BandStateIndicator from '../components/session/BandStateIndicator';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import Pill from '../components/Pill';
@@ -77,6 +84,18 @@ export default function SessionRun() {
   );
 
   const { data: session, isLoading: sessionLoading } = useSession(sessionId);
+
+  // Live child state from the band. The band streams over Wi-Fi whether or
+  // not Bluetooth is connected, so the remembered band ID is enough; the
+  // baseline starts building during preflight.
+  const [rememberedBandId] = useState(() => getRememberedBandId());
+  const liveBandId = useBandStore((st) => st.bandId) ?? rememberedBandId;
+  const childDob = session?.child?.date_of_birth ?? null;
+  const childAgeYears = useMemo(
+    () => (childDob ? differenceInMonths(new Date(), new Date(childDob)) / 12 : null),
+    [childDob],
+  );
+  const liveChildState = useChildState(liveBandId, childAgeYears);
   const { data: sessionActivities } = useSessionActivities(sessionId);
   const { data: activeGoals } = useActiveGoals(session?.child?.id);
   // Fetch existing trials for resume after refresh
@@ -1172,6 +1191,7 @@ export default function SessionRun() {
           <span className="hidden text-[11px] mt-1 sm:inline" style={{ color: '#8E8EA0', fontWeight: 500 }}>
             {t(CHILD_STATES.find((cs) => cs.value === childState)?.captionKey ?? 'child_state_caption_regulated')}
           </span>
+          {liveBandId && <BandStateIndicator live={liveChildState} debug={isDebugMode} />}
 
           {/* Info popover */}
           {showChildStateInfo && (<>
