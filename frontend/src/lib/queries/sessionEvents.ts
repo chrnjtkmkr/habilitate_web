@@ -25,8 +25,9 @@ export function useCreateSessionEvent() {
       sessionActivityId?: string | null;
       eventType: 'spontaneous_initiation' | 'state_change' | 'state_override_cleared';
       stateValue?: string | null;
-      /** 'band' = the child-state engine's own state change. Default 'therapist'. */
-      source?: 'therapist' | 'band';
+      /** 'band' = signed-off engine state; 'band_estimate' = unvalidated
+       *  estimate, kept for clinical validation. Default 'therapist'. */
+      source?: 'therapist' | 'band' | 'band_estimate';
       note?: string | null;
       recordedByUserId?: string;
     }) => {

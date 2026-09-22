@@ -893,7 +893,6 @@
   "band_state_no_data": "no live data",
   "band_state_establishing": "learning this child’s baseline ({{seconds}} of {{total}} s)",
   "band_state_insufficient": "not enough reliable signals",
-  "band_state_withheld": "live, state withheld until clinically validated",
   "band_state_flapping": "Flapping",
   "band_state_debug_provisional": "Provisional, not clinically validated",
   "child_state_set_by_therapist": "Set by therapist · {{time}}",
@@ -903,5 +902,7 @@
   "band_state_reads": "Band reads {{state}}",
   "child_state_timeline_therapist": "Therapist",
   "child_state_timeline_band": "Band",
-  "child_state_none": "No state"
+  "child_state_none": "No state",
+  "child_state_estimate_tag": "Band estimate · not validated",
+  "band_state_reads_estimate": "Band estimate: {{state}} (not validated)"
 }

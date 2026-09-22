@@ -52,8 +52,10 @@ export interface StateResult {
    *  false this is never regulated/amber/dysregulated. */
   state: ChildState;
   /** The state the engine would report with signed-off thresholds, with
-   *  the same hold timers. For validation sessions only; never shown to
-   *  therapists or parents as a clinical state. */
+   *  the same hold timers. Until sign-off the session header shows it to
+   *  the therapist as a marked, unvalidated estimate (dashed, "not
+   *  validated"), recorded as source 'band_estimate' for validation.
+   *  Never shown to parents or in reports. */
   provisional: { state: ChildState; score: number | null };
   validSignalCount: number;
   contributions: {

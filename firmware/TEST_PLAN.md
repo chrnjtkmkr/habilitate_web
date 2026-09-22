@@ -235,31 +235,37 @@ stalling and must be reported.
 ## S1. Child state, live (engine validation)
 
 Open the session page with `?debug=1` added to the URL. The header's
-Regulated / Amber / Dysregulated pills show the band engine's state
-automatically; nobody selects it. Under the pills a **Band** line shows
-the band's status, and in debug mode a second line shows the provisional
-(not clinically validated) state, the score, each signal's points and
+Regulated / Amber / Dysregulated pills follow the band engine
+automatically and switch live; nobody selects them. Under the pills a
+line says where the shown state comes from, and in debug mode a second
+line shows the provisional state, the score, each signal's points and
 deviation (z), the number of valid signals, the baseline length and the
 measured latency.
 
-`CLINICAL_THRESHOLDS_SIGNED_OFF` is false, so the engine never claims a
-state yet: **no pill is highlighted** (never a default "Regulated"), and
-the Band line only ever reads "learning this child's baseline", "not
-enough reliable signals", "live, state withheld until clinically
-validated" or "no live data". The debug line is what this test checks.
+`CLINICAL_THRESHOLDS_SIGNED_OFF` is false, so the band's state is an
+**unvalidated estimate**: the active pill is drawn with a **dashed
+outline** (never the solid fill), with a "Band estimate · not validated"
+tag underneath. No pill is highlighted (never a default "Regulated")
+while the Band line reads "learning this child's baseline", "not enough
+reliable signals" or "no live data". In each step below, the highlighted
+pill should match the debug line's provisional state.
 
-Therapist override (check once): tap Amber. The pill highlights and the
-line reads "Set by therapist · HH:MM" with a **Back to auto** button.
-Refresh the page: the override is still there. Tap Back to auto: no pill
-is highlighted again. Both taps appear in `session_events` with
-`source = 'therapist'` (the second as `state_override_cleared`), and no
-`source = 'band'` rows appear until sign-off.
+Therapist override (check once): tap Amber. The pill turns solid and the
+line reads "Set by therapist · HH:MM" with a **Back to auto** button,
+plus "Band estimate: X (not validated)". Refresh: the override is still
+there. Tap Back to auto: the pills follow the band again (dashed).
+
+Recording: in `session_events` the taps have `source = 'therapist'` (the
+second as `state_override_cleared`), and each change of the dashed pill
+has `source = 'band_estimate'` (a null `state_value` when the band loses
+its state). No `source = 'band'` rows until sign-off. The session
+summary shows only the therapist line, never the estimates.
 
 Wear the band with the pulse sensor and the GSR electrodes on skin.
 
 1. **Baseline.** Sit still for 2 minutes. Expect "learning this child's
-   baseline (n of 60 s)", then "live, state withheld". The debug line
-   should read provisional `regulated`, score 0-1, 3 valid signals.
+   baseline (n of 60 s)", then Regulated highlighted (dashed). The debug
+   line should read provisional `regulated`, score 0-1, 3 valid signals.
 2. **GSR.** Grip the electrodes firmly (or take a sharp breath and hold
    it for 5 s). Expect the GSR z to rise within a few seconds and GSR to
    score 1-2 points. **If the GSR z goes negative instead, the GSR

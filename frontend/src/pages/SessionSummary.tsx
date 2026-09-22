@@ -130,6 +130,7 @@ export default function SessionSummary() {
   // State change events → regions. Therapist entries (with gaps after
   // "back to auto") drive the engagement chart shading; the band's own
   // line is shown beside them in the timeline when it recorded any.
+  // Unvalidated band estimates (source 'band_estimate') are never shown.
   const stateRegions = useMemo(
     () => (sessionStartMs ? stateRegionsFor(events, 'therapist', sessionStartMs, durationSec) : []),
     [events, sessionStartMs, durationSec],
@@ -226,7 +227,7 @@ export default function SessionSummary() {
     const best = sorted[0];
     const worst = sorted[sorted.length - 1];
     const spontCount = spontaneousDots.length;
-    const stateCount = events.filter((e) => e.event_type === 'state_change' && e.source !== 'band').length;
+    const stateCount = events.filter((e) => e.event_type === 'state_change' && (e.source ?? 'therapist') === 'therapist').length;
 
     let text = `${session?.child?.full_name ?? 'Child'} was most engaged during ${best.name} (${best.engagement.toFixed(0)}%)`;
     if (sorted.length > 1 && worst.name !== best.name) {

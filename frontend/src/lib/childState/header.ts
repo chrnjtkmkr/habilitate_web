@@ -1,17 +1,23 @@
-import type { ChildState } from './engine';
+import { CLINICAL_THRESHOLDS_SIGNED_OFF, type ChildState, type StateResult } from './engine';
 
 // How the session header's child state is chosen, and how the recorded
 // session events turn back into timelines for the report.
 //
-//   Header = therapist override if set, else the band engine's state
-//   (which the engine withholds until thresholds are clinically signed
-//   off), else no state at all. A missing state is never shown as
-//   "Regulated".
+//   Header = therapist override if set, else the band's reading, else no
+//   state at all. A missing state is never shown as "Regulated".
+//
+//   Band reading: the engine's state once thresholds are clinically
+//   signed off. Before that, its provisional state, shown to the
+//   therapist as a marked, unvalidated estimate. Either way the engine
+//   still returns establishing / insufficient rather than guessing.
 //
 //   Events (session_events):
-//     therapist state_change            override set to state_value
-//     therapist state_override_cleared  override ended, back to auto
-//     band state_change                 engine state; null = no state
+//     therapist     state_change            override set to state_value
+//     therapist     state_override_cleared  override ended, back to auto
+//     band          state_change            signed-off engine state
+//     band_estimate state_change            unvalidated estimate, kept for
+//                                           clinical validation only
+//   For band sources, a null state_value = the band has no state.
 
 export type ClaimState = 'regulated' | 'amber' | 'dysregulated';
 
@@ -23,13 +29,33 @@ export interface StateOverride {
   at: number; // epoch ms
 }
 
-/** The engine's state if it is a claim the product may show, else null. */
-export function bandClaim(state: ChildState | undefined, stale: boolean): ClaimState | null {
-  return !stale && isClaimState(state) ? state : null;
+export interface BandReading {
+  state: ClaimState;
+  /** false = provisional estimate; thresholds not clinically signed off. */
+  validated: boolean;
 }
 
-export function displayedChildState(override: StateOverride | null, band: ClaimState | null): ClaimState | null {
-  return override?.state ?? band;
+export type BandSource = 'band' | 'band_estimate';
+
+/** What the band currently reads, or null when it has no state to show. */
+export function bandReading(
+  result: Pick<StateResult, 'state' | 'provisional'> | null | undefined,
+  stale: boolean,
+  signedOff: boolean = CLINICAL_THRESHOLDS_SIGNED_OFF,
+): BandReading | null {
+  if (!result || stale) return null;
+  if (isClaimState(result.state)) return { state: result.state, validated: true };
+  if (!signedOff && isClaimState(result.provisional.state)) {
+    return { state: result.provisional.state, validated: false };
+  }
+  return null;
+}
+
+export const bandSourceOf = (r: BandReading | null, signedOff: boolean = CLINICAL_THRESHOLDS_SIGNED_OFF): BandSource =>
+  (r ? r.validated : signedOff) ? 'band' : 'band_estimate';
+
+export function displayedChildState(override: StateOverride | null, band: BandReading | null): ClaimState | null {
+  return override?.state ?? band?.state ?? null;
 }
 
 export interface StateEventRow {
@@ -79,7 +105,7 @@ export function stateRegions(
   };
 
   for (const e of sortByTime(events)) {
-    if ((source === 'therapist') !== isTherapist(e)) continue;
+    if (source === 'therapist' ? !isTherapist(e) : e.source !== source) continue; // estimates never count
     if (e.event_type !== 'state_change' && e.event_type !== 'state_override_cleared') continue;
     const atSec = clamp((new Date(e.recorded_at).getTime() - sessionStartMs) / 1000, 0, durationSec);
     close(atSec);

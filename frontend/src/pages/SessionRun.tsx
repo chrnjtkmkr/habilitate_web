@@ -34,9 +34,10 @@ import {
 } from '../lib/bandStore';
 import { useChildState } from '../hooks/useChildState';
 import BandStateIndicator from '../components/session/BandStateIndicator';
-import { CLINICAL_THRESHOLDS_SIGNED_OFF } from '../lib/childState/engine';
 import {
-  bandClaim,
+  bandReading,
+  bandSourceOf,
+  type BandSource,
   displayedChildState,
   overrideFromEvents,
   type ClaimState,
@@ -104,7 +105,11 @@ export default function SessionRun() {
     [childDob],
   );
   const liveChildState = useChildState(liveBandId, childAgeYears);
-  const liveBandClaim = bandClaim(liveChildState.result?.state, liveChildState.stale);
+  // What the band reads now: a signed-off state, or before sign-off an
+  // unvalidated estimate (shown dashed). Primitives, for effect deps.
+  const liveBand = bandReading(liveChildState.result, liveChildState.stale);
+  const liveBandState = liveBand?.state ?? null;
+  const liveBandValidated = liveBand?.validated ?? false;
   const { data: sessionActivities } = useSessionActivities(sessionId);
   const { data: activeGoals } = useActiveGoals(session?.child?.id);
   // Fetch existing trials for resume after refresh
@@ -555,27 +560,31 @@ export default function SessionRun() {
     ? (sessionActivities[currentActivityIndex] ?? null)
     : null;
 
-  // Record the band's own state changes (source 'band') so the report can
-  // show the band line next to the therapist's. Dormant until thresholds
-  // are clinically signed off: before that the engine never claims a state.
-  // A null value marks the band losing its state (a gap in its line).
+  // Record the band's reading as it changes, so it can be compared with
+  // the therapist's observations. Signed-off states are source 'band';
+  // until sign-off they are unvalidated estimates, source 'band_estimate',
+  // which reports never show. A null value marks the band losing its
+  // state (a gap in its line).
   const recordSessionEvent = createSessionEvent.mutate;
   const currentActivityId = currentActivity?.id ?? null;
-  const lastRecordedBandClaimRef = useRef<ClaimState | null>(null);
+  const lastRecordedBandRef = useRef<{ state: ClaimState | null; source: BandSource } | null>(null);
   useEffect(() => {
-    if (!CLINICAL_THRESHOLDS_SIGNED_OFF) return;
     if (phase !== 'live' || isPaused || !sessionId || !user) return;
-    if (liveBandClaim === lastRecordedBandClaimRef.current) return;
-    lastRecordedBandClaimRef.current = liveBandClaim;
+    const last = lastRecordedBandRef.current;
+    const source = liveBandState
+      ? bandSourceOf({ state: liveBandState, validated: liveBandValidated })
+      : last?.source ?? bandSourceOf(null);
+    if (last ? last.state === liveBandState && last.source === source : liveBandState === null) return;
+    lastRecordedBandRef.current = { state: liveBandState, source };
     recordSessionEvent({
       sessionId,
       sessionActivityId: currentActivityId,
       eventType: 'state_change',
-      stateValue: liveBandClaim,
-      source: 'band',
+      stateValue: liveBandState,
+      source,
       recordedByUserId: user.id,
     });
-  }, [liveBandClaim, phase, isPaused, sessionId, user, currentActivityId, recordSessionEvent]);
+  }, [liveBandState, liveBandValidated, phase, isPaused, sessionId, user, currentActivityId, recordSessionEvent]);
 
   function getCurrentActivityResponse(): TrialResponse | null {
     if (!currentActivity) return null;
@@ -1187,7 +1196,10 @@ export default function SessionRun() {
     : displayMetrics?.face_state === 'looking_away' || displayMetrics?.face_state === 'head_down' ? '#D97706'
     : '#9C9C95';
 
-  const childState = displayedChildState(stateOverride, liveBandClaim);
+  const childState = displayedChildState(stateOverride, liveBand);
+  // Unvalidated band estimates are drawn dashed, never in the solid style
+  // a therapist's own selection (or a signed-off state) uses.
+  const childStateIsEstimate = !stateOverride && !!liveBand && !liveBand.validated;
   const pillStyle: Record<ChildState, { bg: string; color: string; dot: string }> = {
     regulated: { bg: '#E8F5F0', color: '#1A6B4F', dot: '#4ADE80' },
     amber: { bg: '#FEF3E2', color: '#92600A', dot: '#FBBF24' },
@@ -1221,13 +1233,24 @@ export default function SessionRun() {
           <div className="flex items-center gap-1.5">
             {CHILD_STATES.map((cs) => {
               const active = childState === cs.value;
+              const estimate = active && childStateIsEstimate;
               const ps = pillStyle[cs.value];
               return (
                 <button key={cs.value} onClick={() => handleChildStateChange(cs.value)}
                   disabled={isPaused}
+                  aria-pressed={active}
+                  title={estimate ? t('child_state_estimate_tag') : undefined}
                   className={`flex items-center gap-1.5 rounded-full px-3 text-[12px] font-semibold transition-all ${isPaused ? 'opacity-40 pointer-events-none' : ''}`}
-                  style={{ height: 28, backgroundColor: active ? ps.bg : 'transparent', color: active ? ps.color : '#8E8EA0', border: active ? 'none' : '1px solid #D4D4DC' }}>
-                  {active && <span className="w-2 h-2 rounded-full" style={{ backgroundColor: ps.dot }} />}
+                  style={{
+                    height: 28,
+                    backgroundColor: estimate ? '#FFFFFF' : active ? ps.bg : 'transparent',
+                    color: active ? ps.color : '#8E8EA0',
+                    border: estimate ? `1.5px dashed ${ps.color}` : active ? 'none' : '1px solid #D4D4DC',
+                  }}>
+                  {active && (
+                    <span className="w-2 h-2 rounded-full"
+                      style={estimate ? { border: `1.5px solid ${ps.dot}` } : { backgroundColor: ps.dot }} />
+                  )}
                   {t(cs.i18nKey)}
                 </button>
               );

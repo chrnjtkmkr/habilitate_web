@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
+import type { ChildState } from './engine';
 import {
-  bandClaim,
+  bandReading,
+  bandSourceOf,
   displayedChildState,
   overrideFromEvents,
   stateRegions,
@@ -19,16 +21,33 @@ describe('header child state', () => {
     expect(displayedChildState(null, null)).toBeNull();
   });
 
-  it('only shows band claims, and not when the data is stale', () => {
-    expect(bandClaim('insufficient', false)).toBeNull();
-    expect(bandClaim('establishing', false)).toBeNull();
-    expect(bandClaim('amber', true)).toBeNull();
-    expect(bandClaim('amber', false)).toBe('amber');
+  const r = (state: ChildState, provisional: ChildState) => ({ state, provisional: { state: provisional, score: null } });
+
+  it('before sign-off, shows the provisional state as an unvalidated estimate', () => {
+    expect(bandReading(r('insufficient', 'amber'), false, false)).toEqual({ state: 'amber', validated: false });
+  });
+
+  it('never guesses: establishing / insufficient / stale give no reading', () => {
+    expect(bandReading(r('establishing', 'establishing'), false, false)).toBeNull();
+    expect(bandReading(r('insufficient', 'insufficient'), false, false)).toBeNull();
+    expect(bandReading(r('insufficient', 'amber'), true, false)).toBeNull();
+    expect(bandReading(null, false, false)).toBeNull();
+  });
+
+  it('after sign-off, the engine state is a validated reading', () => {
+    expect(bandReading(r('dysregulated', 'dysregulated'), false, true)).toEqual({ state: 'dysregulated', validated: true });
+  });
+
+  it('records estimates and validated states under separate sources', () => {
+    expect(bandSourceOf({ state: 'amber', validated: false }, false)).toBe('band_estimate');
+    expect(bandSourceOf({ state: 'amber', validated: true }, true)).toBe('band');
+    expect(bandSourceOf(null, false)).toBe('band_estimate');
+    expect(bandSourceOf(null, true)).toBe('band');
   });
 
   it('therapist override wins over the band', () => {
-    expect(displayedChildState({ state: 'dysregulated', at: START }, 'regulated')).toBe('dysregulated');
-    expect(displayedChildState(null, 'amber')).toBe('amber');
+    expect(displayedChildState({ state: 'dysregulated', at: START }, { state: 'regulated', validated: false })).toBe('dysregulated');
+    expect(displayedChildState(null, { state: 'amber', validated: false })).toBe('amber');
   });
 });
 
@@ -37,6 +56,7 @@ describe('overrideFromEvents', () => {
     const o = overrideFromEvents([
       ev(10, 'state_change', 'amber'),
       ev(20, 'state_change', 'regulated', 'band'),
+      ev(25, 'state_change', 'dysregulated', 'band_estimate'),
     ]);
     expect(o).toEqual({ state: 'amber', at: START + 10_000 });
   });
@@ -58,6 +78,7 @@ describe('stateRegions / timelineSegments', () => {
     ev(0, 'state_change', 'regulated', 'band'),
     ev(90, 'state_change', null, 'band'),
     ev(150, 'state_change', 'dysregulated', 'band'),
+    ev(30, 'state_change', 'amber', 'band_estimate'),
   ];
 
   it('therapist line ends at back to auto', () => {
