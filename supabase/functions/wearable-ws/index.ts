@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 
+import { ClockMap, SecondAggregator } from "./aggregate.ts";
+
 // Rebuilt on 2026-09-22 from the version actually deployed at the time
 // (downloaded with `supabase functions download`), not from the older
 // repo copy, which queried sensor_devices.is_online, a column that does
@@ -28,17 +30,19 @@ type SensorPayload = {
   seq: number;
   t: number;
   boot?: number;        // random per band boot (firmware 0.6.0+)
-  ax?: number;
-  ay?: number;
-  az?: number;
-  gx?: number;
-  gy?: number;
-  gz?: number;
-  temp?: number;
-  hr?: number;
-  hrv?: number;         // RMSSD computed on the band; stored as hrv_device
-  spo2?: number;
-  gsr?: number;
+  // null means the sensor is missing or gave no valid reading (0.6.2+);
+  // it is stored as NULL, never replaced with a stand-in value.
+  ax?: number | null;
+  ay?: number | null;
+  az?: number | null;
+  gx?: number | null;
+  gy?: number | null;
+  gz?: number | null;
+  temp?: number | null;
+  hr?: number | null;
+  hrv?: number | null;  // RMSSD computed on the band; stored as hrv_device
+  spo2?: number | null;
+  gsr?: number | null;
   beats?: BeatTuple[];  // firmware 0.6.0+; Postgres computes hrv from these
 };
 
@@ -162,33 +166,39 @@ async function insertBeats(bandId: string, bootId: number, beats: BeatTuple[]): 
   return null;
 }
 
+type InsertResult = { error: string | null; hrv: number | null };
+
 async function insertTelemetryOnce(
   bandId: string,
   seq: number,
   p: SensorPayload,
-): Promise<string | null> {
+  sampleAt: number | null,
+): Promise<InsertResult> {
   const hasBoot = p.boot !== undefined;
-  const { error } = await supabase.from("device_telemetry").insert({
+  const { data, error } = await supabase.from("device_telemetry").insert({
     band_id: bandId,
     seq: seq,
     t: p.t,
-    ax: p.ax ?? 0,
-    ay: p.ay ?? 0,
-    az: p.az ?? 0,
-    gx: p.gx ?? 0,
-    gy: p.gy ?? 0,
-    gz: p.gz ?? 0,
-    temp: p.temp ?? 0,
+    sample_at: sampleAt === null ? null : new Date(sampleAt).toISOString(),
+    // Missing sensors stay NULL. The old 0 defaults turned missing motion
+    // into 1 g of movement and missing temperature into 0 degC.
+    ax: p.ax ?? null,
+    ay: p.ay ?? null,
+    az: p.az ?? null,
+    gx: p.gx ?? null,
+    gy: p.gy ?? null,
+    gz: p.gz ?? null,
+    temp: p.temp ?? null,
     hr: sensorOrNull(p.hr),
     spo2: sensorOrNull(p.spo2),
-    gsr: p.gsr ?? 0,
+    gsr: p.gsr ?? null,
     // With a boot id, the insert trigger computes hrv from device_beats and
     // the band's own figure is kept for comparison. Older firmware sends no
     // beats, so its figure is the only one and goes straight into hrv.
     boot_id: hasBoot ? p.boot : null,
     hrv_device: sensorOrNull(p.hrv),
     ...(hasBoot ? {} : { hrv: sensorOrNull(p.hrv) }),
-  });
+  }).select("hrv").single();
 
   if (error) {
     console.error(
@@ -197,22 +207,23 @@ async function insertTelemetryOnce(
       error.details ?? "",
       error.hint ?? "",
     );
-    return error.message;
+    return { error: error.message, hrv: null };
   }
-  return null;
+  return { error: null, hrv: (data?.hrv as number | null | undefined) ?? null };
 }
 
 async function insertTelemetry(
   bandId: string,
   seq: number,
   p: SensorPayload,
-): Promise<string | null> {
-  const firstError = await insertTelemetryOnce(bandId, seq, p);
-  if (!firstError) return null;
+  sampleAt: number | null,
+): Promise<InsertResult> {
+  const first = await insertTelemetryOnce(bandId, seq, p, sampleAt);
+  if (!first.error) return first;
 
   await new Promise((r) => setTimeout(r, 500));
   console.info(`[DB] Retrying device_telemetry — band=${bandId} seq=${seq}`);
-  return insertTelemetryOnce(bandId, seq, p);
+  return insertTelemetryOnce(bandId, seq, p, sampleAt);
 }
 
 Deno.serve(async (req) => {
@@ -287,6 +298,23 @@ Deno.serve(async (req) => {
   EdgeRuntime.waitUntil(socketClosed);
 
   let lastSequence = -1;
+
+  // Band clock -> real time, and one band_seconds row per second of
+  // device time for the child-state engine (firmware 0.6.0+, which sends
+  // a boot id). hrv is the database value returned by the latest insert.
+  const clock = new ClockMap();
+  let latestHrv: number | null = null;
+  let aggregatorBoot: number | null = null;
+  const aggregator = new SecondAggregator(clock, () => latestHrv, (row) => {
+    const bootId = aggregatorBoot;
+    if (bootId === null) return;
+    runInBackground("band_seconds insert", () =>
+      supabase.from("band_seconds").upsert(
+        { band_id: device.device_uid, boot_id: bootId, ...row },
+        { onConflict: "band_id,boot_id,device_second", ignoreDuplicates: true },
+      )
+    );
+  });
 
   runInBackground("device_credentials.last_used_at", () =>
     supabase
@@ -429,13 +457,24 @@ Deno.serve(async (req) => {
         return;
       }
 
+      // Aggregate before any await, so packets are binned in arrival order.
+      clock.observe(payload.t, Date.now());
+      const sampleAt = clock.toWall(payload.t);
+      if (payload.boot !== undefined) {
+        if (aggregatorBoot !== null && aggregatorBoot !== payload.boot) aggregator.flush();
+        aggregatorBoot = payload.boot;
+        aggregator.add(payload);
+      }
+
       // A failed beats insert must not cost the telemetry row: hrv is then
       // NULL (or computed from fewer beats) for a moment, nothing more.
       if (payload.boot !== undefined && payload.beats && payload.beats.length > 0) {
         await insertBeats(safeBandId, payload.boot, payload.beats);
       }
 
-      const insertError = await insertTelemetry(safeBandId, seq, payload);
+      const inserted = await insertTelemetry(safeBandId, seq, payload, sampleAt);
+      const insertError = inserted.error;
+      if (!insertError && payload.boot !== undefined) latestHrv = inserted.hrv;
 
       if (insertError) {
         send(socket, {
@@ -465,6 +504,7 @@ Deno.serve(async (req) => {
       `[WS] Connection closed — band=${device.device_uid}` +
       ` code=${event.code} reason=${event.reason || "(none)"}`,
     );
+    aggregator.flush();  // the last, partial second
     resolveSocketClosed();
   };
 
