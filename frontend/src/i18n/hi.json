@@ -833,5 +833,6 @@
   "band_wifi_state_unknown": "जाँच हो रही है",
   "band_wifi_state_unknown_detail": "बैंड की वाई-फ़ाई स्थिति जाँची जा रही है...",
   "band_wifi_enterprise_unsupported": "समर्थित नहीं: इस नेटवर्क में यूज़रनेम से साइन-इन करना होता है (एंटरप्राइज़ वाई-फ़ाई)",
-  "band_session_not_synced": "बैंड तक सत्र की स्थिति नहीं पहुँच रही"
+  "band_session_not_synced": "बैंड तक सत्र की स्थिति नहीं पहुँच रही",
+  "band_session_reconnect": "बैंड फिर से जोड़ें"
 }

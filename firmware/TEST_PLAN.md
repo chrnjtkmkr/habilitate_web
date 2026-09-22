@@ -80,7 +80,10 @@ phone hotspot and the office Wi-Fi), plus one wrong password.
    10 s. Pause it: purple blinking. Resume: purple solid. End it: back to
    orange solid. The session header must not show "Band not receiving
    session state"; if it does, copy the browser console lines starting
-   with `[Wearable]`.
+   with `[Wearable]`. Then reload the page mid-session: the header shows
+   "Band not receiving session state · Reconnect band" (the browser needs
+   a click to hand the band back after a reload). Click it, pick the
+   band, and the LED must return to purple.
 4. Without unplugging the band, click **Change Wi-Fi network**, scan,
    pick **B**, enter its password and connect.
 5. Expect in the log, in order:

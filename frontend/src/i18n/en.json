@@ -881,5 +881,6 @@
   "band_wifi_state_unknown": "Checking",
   "band_wifi_state_unknown_detail": "Checking the band's Wi-Fi status...",
   "band_wifi_enterprise_unsupported": "Not supported: this network needs a username sign-in (enterprise Wi-Fi)",
-  "band_session_not_synced": "Band not receiving session state"
+  "band_session_not_synced": "Band not receiving session state",
+  "band_session_reconnect": "Reconnect band"
 }

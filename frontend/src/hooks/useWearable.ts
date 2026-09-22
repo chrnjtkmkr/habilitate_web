@@ -5,19 +5,21 @@ import {
 } from 'react';
 
 import {
-  connectToHabilitateBand,
-  disconnectFromHabilitateBand,
   provisionWiFi,
   readWiFiStatus,
-  reconnectToAuthorizedHabilitateBand,
   scanWiFiNetworks,
-  type HabilitateBluetoothDevice,
   type WiFiNetwork,
 } from '../services/bleService';
 import {
   describeWifiStatus,
   WIFI_STATUS_TIMEOUT,
 } from '../services/wifiStatus';
+import {
+  connectBandWithPicker,
+  disconnectBand,
+  restoreBand,
+  useBandStore,
+} from '../lib/bandStore';
 
 // How long configureWiFi() waits for a final status. A join takes up
 // to 20 s on the band and the first server handshake several more.
@@ -34,17 +36,16 @@ export type WearableStatus =
   | 'error';
 
 export function useWearable() {
-  const [status, setStatus] =
-    useState<WearableStatus>('disconnected');
+  // The Bluetooth connection itself lives in bandStore, so it survives
+  // this card unmounting when a session goes live. This hook adds the
+  // Wi-Fi setup state the card needs.
+  const device = useBandStore((s) => s.device);
+  const bandId = useBandStore((s) => s.bandId);
+  const linkStatus = useBandStore((s) => s.status);
+  const error = useBandStore((s) => s.error);
 
-  const [bandId, setBandId] =
-    useState<string | null>(null);
-
-  const [device, setDevice] =
-    useState<HabilitateBluetoothDevice | null>(null);
-
-  const [error, setError] =
-    useState<string | null>(null);
+  const status: WearableStatus =
+    linkStatus === 'reconnecting' ? 'connecting' : linkStatus;
 
   // ==========================================================
   // WIFI STATE
@@ -81,175 +82,58 @@ export function useWearable() {
     wifiStatus === 'CONNECTED';
 
   // ==========================================================
-  // SAVE LAST BAND ID
+  // MANUAL BLE CONNECTION (opens the browser's device picker)
   // ==========================================================
 
-  const rememberBandId = useCallback(
-    (id: string) => {
-      try {
-        localStorage.setItem(
-          'habilitate.bandId',
-          id,
-        );
-      } catch {
-        // Ignore localStorage errors.
-      }
-    },
+  const connect = useCallback(
+    () => connectBandWithPicker(),
     [],
   );
 
   // ==========================================================
-  // MANUAL BLE CONNECTION
-  // ==========================================================
-
-  const connect = useCallback(async () => {
-    setStatus('connecting');
-    setError(null);
-
-    try {
-      const connected =
-        await connectToHabilitateBand();
-
-      setDevice(connected.device);
-      setBandId(connected.bandId);
-      setStatus('connected');
-
-      rememberBandId(
-        connected.bandId,
-      );
-
-      // Immediately check existing Wi-Fi state.
-      try {
-        const currentWiFiStatus =
-          await readWiFiStatus(
-            connected.device,
-          );
-
-        setWifiStatus(
-          currentWiFiStatus,
-        );
-      } catch {
-        // BLE connection is still valid even if
-        // Wi-Fi status could not be read.
-      }
-
-      return connected;
-    } catch (err) {
-      const message =
-        err instanceof Error
-          ? err.message
-          : 'Unable to connect to the therapy band.';
-
-      setStatus('error');
-      setError(message);
-
-      throw err;
-    }
-  }, [rememberBandId]);
-
-  // ==========================================================
   // AUTOMATIC RESTORATION
   // ==========================================================
-  // Runs when the dashboard/card is mounted.
-  //
-  // It does NOT open the Bluetooth chooser.
-  //
-  // It only checks devices that were previously authorized
-  // by this browser origin.
-  // ==========================================================
+  // Reuses the page's existing connection, or silently restores
+  // a band this origin already authorised where the browser
+  // supports it. Never opens the picker.
 
-  const restoreConnection =
-    useCallback(async () => {
-      try {
-        setError(null);
-
-        let preferredBandId: string | null =
-          null;
-
-        try {
-          preferredBandId =
-            localStorage.getItem(
-              'habilitate.bandId',
-            );
-        } catch {
-          // Ignore localStorage errors.
-        }
-
-        const restored =
-          await reconnectToAuthorizedHabilitateBand(
-            preferredBandId,
-          );
-
-        if (!restored) {
-          return false;
-        }
-
-        setDevice(
-          restored.device,
-        );
-
-        setBandId(
-          restored.bandId,
-        );
-
-        setStatus('connected');
-
-        rememberBandId(
-          restored.bandId,
-        );
-
-        // Read Wi-Fi status immediately after BLE
-        // restoration.
-        try {
-          const currentWiFiStatus =
-            await readWiFiStatus(
-              restored.device,
-            );
-
-          setWifiStatus(
-            currentWiFiStatus,
-          );
-        } catch (wifiErr) {
-          const message =
-            wifiErr instanceof Error
-              ? wifiErr.message
-              : 'Unable to read Wi-Fi status.';
-
-          setWifiError(message);
-        }
-
-        return true;
-      } catch {
-        // Auto restoration is best effort.
-        //
-        // Do not show a scary error because the user may
-        // simply need to use the manual connection button.
-        return false;
-      }
-    }, [rememberBandId]);
-
-  // ==========================================================
-  // AUTOMATIC RESTORE ON MOUNT
-  // ==========================================================
+  const restoreConnection = useCallback(async () => {
+    try {
+      return await restoreBand();
+    } catch {
+      // Best effort: the card still offers "Connect via Bluetooth".
+      return false;
+    }
+  }, []);
 
   useEffect(() => {
+    void restoreConnection();
+  }, [restoreConnection]);
+
+  // Read the band's Wi-Fi status whenever the link comes up,
+  // including after an automatic reconnect.
+  useEffect(() => {
+    if (!device || linkStatus !== 'connected') return;
     let cancelled = false;
-
-    const restore = async () => {
-      const restored =
-        await restoreConnection();
-
-      if (cancelled || !restored) {
-        return;
-      }
-    };
-
-    void restore();
-
+    readWiFiStatus(device)
+      .then((current) => {
+        if (cancelled) return;
+        setWifiStatus(current);
+        setWifiError(null);
+      })
+      .catch((err: unknown) => {
+        // The Bluetooth link can still be fine; only the read failed.
+        if (cancelled) return;
+        setWifiError(
+          err instanceof Error
+            ? err.message
+            : 'Unable to read Wi-Fi status.',
+        );
+      });
     return () => {
       cancelled = true;
     };
-  }, [restoreConnection]);
+  }, [device, linkStatus]);
 
   // ==========================================================
   // MANUAL WIFI STATUS CHECK
@@ -418,66 +302,14 @@ export function useWearable() {
     );
 
   // ==========================================================
-  // BLE DISCONNECTION HANDLER
-  // ==========================================================
-
-  useEffect(() => {
-    if (!device) {
-      return;
-    }
-
-    const handleDisconnected =
-      () => {
-        setDevice(null);
-        setBandId(null);
-        setStatus(
-          'disconnected',
-        );
-
-        // IMPORTANT:
-        //
-        // Do NOT change wifiStatus to NO_CREDENTIALS.
-        //
-        // BLE disconnection does NOT mean that the ESP32
-        // forgot its Wi-Fi credentials.
-      };
-
-    device.addEventListener(
-      'gattserverdisconnected',
-      handleDisconnected,
-    );
-
-    return () => {
-      device.removeEventListener(
-        'gattserverdisconnected',
-        handleDisconnected,
-      );
-    };
-  }, [device]);
-
-  // ==========================================================
   // MANUAL DISCONNECT
   // ==========================================================
+  // wifiStatus is kept on purpose: the band keeps its Wi-Fi
+  // credentials after Bluetooth disconnects.
 
-  const disconnect =
-    useCallback(() => {
-      disconnectFromHabilitateBand(
-        device,
-      );
-
-      setDevice(null);
-      setBandId(null);
-      setStatus(
-        'disconnected',
-      );
-      setError(null);
-
-      // We intentionally do NOT clear:
-      //
-      // wifiStatus
-      //
-      // because Wi-Fi credentials remain stored on the ESP32.
-    }, [device]);
+  const disconnect = useCallback(() => {
+    disconnectBand();
+  }, []);
 
   // ==========================================================
   // RETURN API

@@ -26,10 +26,7 @@ import { getDomainIcon, getSimplifiedGoal, getHelpLadder, pickField, pickArrayFi
 import { useActivityLookup } from '../lib/queries/activities';
 import ActivityPicker from '../components/ActivityPicker';
 import DeviceSetupCard from '../components/device/DeviceSetupCard';
-import {
-  reconnectToAuthorizedHabilitateBand,
-  setWearableSessionState,
-} from '../services/bleService';
+import { connectBandWithPicker, sendBandSessionState } from '../lib/bandStore';
 import Button from '../components/Button';
 import Modal from '../components/Modal';
 import Pill from '../components/Pill';
@@ -66,37 +63,15 @@ export default function SessionRun() {
   // BLE is the control plane; sensor data never travels through BLE.
   // Every failure is logged and surfaced: the band's LED is how the
   // therapist sees the session state, so a silent failure hides it.
+  // The connection is the page-wide one from bandStore (shared with
+  // DeviceSetupCard), which also reconnects on its own after a drop.
   const [bandSync, setBandSync] = useState<'unknown' | 'ok' | 'failed'>('unknown');
   const syncBandSessionState = useCallback(
     async (state: 'ACTIVE' | 'RESUME' | 'PAUSE' | 'STOPPED') => {
-      let preferredBandId: string | null = null;
-      try {
-        preferredBandId = localStorage.getItem('habilitate.bandId');
-      } catch {
-        // Treated as no paired band below.
-      }
-      if (!preferredBandId) {
-        // No band paired: nothing to keep in sync, so not a warning.
-        console.info('[Wearable] session state not sent: no band paired', state);
-        return false;
-      }
-
-      try {
-        const restored = await reconnectToAuthorizedHabilitateBand(preferredBandId);
-        if (!restored) {
-          console.warn('[Wearable] session state not sent: band not reachable over Bluetooth', state);
-          setBandSync('failed');
-          return false;
-        }
-
-        await setWearableSessionState(restored.device, state);
-        setBandSync('ok');
-        return true;
-      } catch (error) {
-        console.warn('[Wearable] session state not sent: write failed', state, error);
-        setBandSync('failed');
-        return false;
-      }
+      const result = await sendBandSessionState(state);
+      // No band paired means nothing to keep in sync, so no warning.
+      if (result !== 'no-band') setBandSync(result === 'sent' ? 'ok' : 'failed');
+      return result === 'sent';
     },
     [],
   );
@@ -125,6 +100,18 @@ export default function SessionRun() {
   const [, setCompositeScore] = useState(0.5);
   const [isPaused, setIsPaused] = useState(false);
   const isPausedRef = useRef(false);
+
+  // Needs a click: after a page reload the browser only hands the
+  // band back through its device picker.
+  const reconnectBand = useCallback(async () => {
+    try {
+      await connectBandWithPicker();
+      await syncBandSessionState(isPausedRef.current ? 'PAUSE' : 'ACTIVE');
+    } catch (error) {
+      console.warn('[Wearable] manual reconnect cancelled or failed', error);
+    }
+  }, [syncBandSessionState]);
+
   const [showNotes, setShowNotes] = useState(false);
   useScrollLock(showNotes);
   const [noteText, setNoteText] = useState('');
@@ -1224,7 +1211,18 @@ export default function SessionRun() {
             {isPaused ? t('resume_session') : t('pause_session')}
           </button>
           {!isOnline && <Pill variant="warning">{t('offline_buffering')}</Pill>}
-          {bandSync === 'failed' && <Pill variant="warning">{t('band_session_not_synced')}</Pill>}
+          {bandSync === 'failed' && (
+            <button
+              type="button"
+              onClick={() => void reconnectBand()}
+              title={t('band_session_reconnect')}
+              className="rounded-full focus:outline-none focus-visible:ring-2 focus-visible:ring-warning"
+            >
+              <Pill variant="warning">
+                {t('band_session_not_synced')} · {t('band_session_reconnect')}
+              </Pill>
+            </button>
+          )}
         </div>
       </header>
 
