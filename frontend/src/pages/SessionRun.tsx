@@ -48,6 +48,9 @@ const CHILD_STATES: { value: ChildState; i18nKey: string; captionKey: string; de
   { value: 'dysregulated', i18nKey: 'child_state_dysregulated', captionKey: 'child_state_caption_dysregulated', descKey: 'child_state_dysregulated_desc', seeKey: 'child_state_dysregulated_see' },
 ];
 
+// How often a live session re-sends its state to the band over Bluetooth.
+const BAND_SESSION_RESYNC_MS = 10_000;
+
 export default function SessionRun() {
   const { t, i18n } = useTranslation();
   const lang = i18n.language;
@@ -61,19 +64,37 @@ export default function SessionRun() {
 
   // Session control is sent over the already-authorized BLE connection.
   // BLE is the control plane; sensor data never travels through BLE.
+  // Every failure is logged and surfaced: the band's LED is how the
+  // therapist sees the session state, so a silent failure hides it.
+  const [bandSync, setBandSync] = useState<'unknown' | 'ok' | 'failed'>('unknown');
   const syncBandSessionState = useCallback(
     async (state: 'ACTIVE' | 'RESUME' | 'PAUSE' | 'STOPPED') => {
+      let preferredBandId: string | null = null;
       try {
-        const preferredBandId = localStorage.getItem('habilitate.bandId');
-        if (!preferredBandId) return false;
+        preferredBandId = localStorage.getItem('habilitate.bandId');
+      } catch {
+        // Treated as no paired band below.
+      }
+      if (!preferredBandId) {
+        // No band paired: nothing to keep in sync, so not a warning.
+        console.info('[Wearable] session state not sent: no band paired', state);
+        return false;
+      }
 
+      try {
         const restored = await reconnectToAuthorizedHabilitateBand(preferredBandId);
-        if (!restored) return false;
+        if (!restored) {
+          console.warn('[Wearable] session state not sent: band not reachable over Bluetooth', state);
+          setBandSync('failed');
+          return false;
+        }
 
         await setWearableSessionState(restored.device, state);
+        setBandSync('ok');
         return true;
       } catch (error) {
-        console.warn('[Wearable] session-state sync failed', state, error);
+        console.warn('[Wearable] session state not sent: write failed', state, error);
+        setBandSync('failed');
         return false;
       }
     },
@@ -348,11 +369,22 @@ export default function SessionRun() {
   }, [phase, syncBandSessionState]);
 
   // Whenever the live phase starts (including session resume after refresh),
-  // put the band into ACTIVE state. This is intentionally best-effort because
-  // telemetry itself does not depend on BLE once Wi-Fi/WSS is established.
+  // put the band into ACTIVE state, then keep re-sending the current state.
+  // The band holds it in RAM only, so a band reboot or a dropped Bluetooth
+  // link would otherwise leave its LED showing no session for the rest of it.
   useEffect(() => {
     if (phase !== 'live') return;
-    void syncBandSessionState('ACTIVE');
+    void syncBandSessionState(isPausedRef.current ? 'PAUSE' : 'ACTIVE');
+
+    let inFlight = false;
+    const timer = window.setInterval(() => {
+      if (inFlight) return;
+      inFlight = true;
+      void syncBandSessionState(isPausedRef.current ? 'PAUSE' : 'ACTIVE')
+        .finally(() => { inFlight = false; });
+    }, BAND_SESSION_RESYNC_MS);
+
+    return () => window.clearInterval(timer);
   }, [phase, syncBandSessionState]);
 
   // Session timer
@@ -1192,6 +1224,7 @@ export default function SessionRun() {
             {isPaused ? t('resume_session') : t('pause_session')}
           </button>
           {!isOnline && <Pill variant="warning">{t('offline_buffering')}</Pill>}
+          {bandSync === 'failed' && <Pill variant="warning">{t('band_session_not_synced')}</Pill>}
         </div>
       </header>
 

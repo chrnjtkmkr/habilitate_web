@@ -297,11 +297,12 @@ export async function reconnectToAuthorizedHabilitateBand(
       device,
       bandId,
     };
-  } catch {
-    // Automatic restoration is intentionally best-effort.
-    //
-    // If it fails, the UI will still provide the normal
-    // "Connect via Bluetooth" button.
+  } catch (error) {
+    // Automatic restoration is intentionally best-effort: if it
+    // fails, the UI still offers "Connect via Bluetooth". The
+    // reason is logged because callers such as session-state sync
+    // depend on this succeeding without a user gesture.
+    console.warn('[Wearable] Bluetooth reconnect failed', error);
     return null;
   }
 }
