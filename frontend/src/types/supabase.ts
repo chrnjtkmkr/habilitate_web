@@ -9,6 +9,42 @@ export type Json =
 export type Database = {
   public: {
     Tables: {
+      device_beats: {
+        Row: {
+          id: number
+          band_id: string
+          boot_id: number
+          chain: number
+          beat_seq: number
+          t_ms: number
+          ibi_ms: number
+          clean: boolean
+          created_at: string
+        }
+        Insert: {
+          id?: never
+          band_id: string
+          boot_id: number
+          chain: number
+          beat_seq: number
+          t_ms: number
+          ibi_ms: number
+          clean: boolean
+          created_at?: string
+        }
+        Update: {
+          id?: never
+          band_id?: string
+          boot_id?: number
+          chain?: number
+          beat_seq?: number
+          t_ms?: number
+          ibi_ms?: number
+          clean?: boolean
+          created_at?: string
+        }
+        Relationships: []
+      }
       device_telemetry: {
         Row: {
           id: string
@@ -29,6 +65,8 @@ export type Database = {
           // Generated: sqrt(ax^2 + ay^2 + az^2), in g, ~1.0 at rest.
           motion: number
           created_at: string
+          boot_id: number | null
+          hrv_device: number | null
         }
         Insert: {
           id?: string
@@ -47,6 +85,8 @@ export type Database = {
           spo2?: number | null
           gsr: number
           created_at?: string
+          boot_id?: number | null
+          hrv_device?: number | null
         }
         Update: {
           id?: string
@@ -65,6 +105,8 @@ export type Database = {
           spo2?: number | null
           gsr?: number
           created_at?: string
+          boot_id?: number | null
+          hrv_device?: number | null
         }
         Relationships: []
       }

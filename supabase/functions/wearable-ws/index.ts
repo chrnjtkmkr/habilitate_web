@@ -1,4 +1,9 @@
-import { createClient } from "jsr:@supabase/supabase-js@2";
+import { createClient } from "@supabase/supabase-js";
+
+// Rebuilt on 2026-09-22 from the version actually deployed at the time
+// (downloaded with `supabase functions download`), not from the older
+// repo copy, which queried sensor_devices.is_online, a column that does
+// not exist in production.
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -15,14 +20,14 @@ const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
 
 const encoder = new TextEncoder();
 
-// ============================================================
-// Types
-// ============================================================
+// One beat-to-beat interval from the band: [seq, chain, t_ms, ibi_ms, clean].
+type BeatTuple = [number, number, number, number, number | boolean];
 
 type SensorPayload = {
   band_id: string;
   seq: number;
   t: number;
+  boot?: number;        // random per band boot (firmware 0.6.0+)
   ax?: number;
   ay?: number;
   az?: number;
@@ -31,14 +36,13 @@ type SensorPayload = {
   gz?: number;
   temp?: number;
   hr?: number;
-  hrv?: number;
+  hrv?: number;         // RMSSD computed on the band; stored as hrv_device
   spo2?: number;
   gsr?: number;
+  beats?: BeatTuple[];  // firmware 0.6.0+; Postgres computes hrv from these
 };
 
-// ============================================================
-// Helpers
-// ============================================================
+const MAX_BEATS_PER_PACKET = 64;
 
 function jsonResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -64,17 +68,20 @@ async function sha256Hex(value: string): Promise<string> {
     .join("");
 }
 
-/**
- * Accepts the sensor payload regardless of whether the firmware
- * sent it flat  { type, band_id, seq, ... }
- * or nested     { type, data: { band_id, seq, ... } }
- *
- * Both shapes are valid; the nested shape is current firmware.
- */
+// Background work that must actually run. supabase-js queries are lazy
+// thenables: handing one to waitUntil() without awaiting it never sends
+// it, which is why device_credentials.last_used_at was never written.
+function runInBackground(label: string, work: () => PromiseLike<{ error: { message: string } | null }>) {
+  // @ts-ignore EdgeRuntime is provided by the Supabase runtime
+  EdgeRuntime.waitUntil((async () => {
+    const { error } = await work();
+    if (error) console.warn(`[DB] ${label} failed:`, error.message);
+  })());
+}
+
 function extractSensorPayload(
   message: Record<string, unknown>,
 ): SensorPayload | null {
-  // Nested shape (current firmware + test-wss.mjs)
   if (
     message.data !== undefined &&
     typeof message.data === "object" &&
@@ -83,11 +90,25 @@ function extractSensorPayload(
     return message.data as SensorPayload;
   }
 
-  // Flat shape (legacy firmware — band_id present at top level)
   if (typeof message.band_id === "string") {
     return message as unknown as SensorPayload;
   }
 
+  return null;
+}
+
+function validateBeats(beats: unknown): string | null {
+  if (!Array.isArray(beats)) return "beats must be an array";
+  if (beats.length > MAX_BEATS_PER_PACKET) return "too many beats";
+  for (const b of beats) {
+    if (!Array.isArray(b) || b.length !== 5) return "beat must be [seq, chain, t_ms, ibi_ms, clean]";
+    const [seq, chain, tMs, ibi, clean] = b;
+    if (!Number.isInteger(seq) || seq < 0) return "invalid beat seq";
+    if (!Number.isInteger(chain) || chain < 0) return "invalid beat chain";
+    if (!Number.isInteger(tMs) || tMs < 0) return "invalid beat t_ms";
+    if (!isFiniteNum(ibi) || ibi <= 0 || ibi >= 5000) return "invalid beat ibi_ms";
+    if (clean !== 0 && clean !== 1 && clean !== true && clean !== false) return "invalid beat clean flag";
+  }
   return null;
 }
 
@@ -97,9 +118,14 @@ function validatePayload(p: SensorPayload): string | null {
   }
   if (!Number.isInteger(p.seq) || p.seq < 0) return "invalid seq";
   if (!Number.isFinite(p.t)) return "invalid t";
+  if (p.boot !== undefined && (!Number.isInteger(p.boot) || p.boot <= 0)) return "invalid boot";
+  if (p.beats !== undefined) {
+    const beatsError = validateBeats(p.beats);
+    if (beatsError) return beatsError;
+  }
 
   for (const [key, val] of Object.entries(p)) {
-    if (key === "band_id") continue;
+    if (key === "band_id" || key === "beats") continue;
     if (val !== undefined && val !== null && !isFiniteNum(val)) {
       return `non-finite value for field '${key}'`;
     }
@@ -107,68 +133,41 @@ function validatePayload(p: SensorPayload): string | null {
   return null;
 }
 
-// ============================================================
-// Device online / offline — fire-and-forget
-// ============================================================
-
-async function markDeviceOnline(deviceId: string): Promise<void> {
-  const now = new Date().toISOString();
-  const { error } = await supabase
-    .from("sensor_devices")
-    .update({ is_online: true, online_since: now, last_online_at: now })
-    .eq("id", deviceId);
-  if (error) console.error("[DB] markDeviceOnline failed:", error.message, error.details ?? "");
-}
-
-async function markDeviceOffline(deviceId: string): Promise<void> {
-  const { error } = await supabase
-    .from("sensor_devices")
-    .update({
-      is_online: false,
-      last_online_at: new Date().toISOString(),
-      online_since: null,
-    })
-    .eq("id", deviceId);
-  if (error) console.error("[DB] markDeviceOffline failed:", error.message, error.details ?? "");
-}
-
-// Heartbeat: update last_online_at so the staleness guard knows
-// this device is still alive.
-async function heartbeatOnline(deviceId: string): Promise<void> {
-  const { error } = await supabase
-    .from("sensor_devices")
-    .update({ last_online_at: new Date().toISOString() })
-    .eq("id", deviceId);
-  if (error) console.warn("[DB] heartbeat update failed:", error.message);
-}
-
-// Expire devices that appear online but haven't sent a heartbeat
-// in over 2 minutes.  Called once per new connection so stale
-// flags are cleared promptly.
-async function expireStaleDevices(): Promise<void> {
-  const { error } = await supabase.rpc("expire_stale_online_devices");
-  if (error) console.warn("[DB] expire_stale_online_devices failed:", error.message);
-}
-
-// Convert sensor value: store -1 "no reading" as null.
 function sensorOrNull(v: number | undefined | null): number | null {
   if (v === undefined || v === null || v < 0) return null;
   return v;
 }
 
-// ============================================================
-// Write raw telemetry to device_telemetry
-// ============================================================
-// device_telemetry stores raw sensor readings.  Columns hr and
-// spo2 are now nullable (migration 0065) so -1 "no finger"
-// values are stored as NULL rather than 0.
-// ============================================================
+// Beats go in before the telemetry row of the same packet, because the
+// row's insert trigger computes hrv from them. Re-sent beats (same band,
+// boot and seq) are ignored.
+async function insertBeats(bandId: string, bootId: number, beats: BeatTuple[]): Promise<string | null> {
+  if (beats.length === 0) return null;
+  const { error } = await supabase.from("device_beats").upsert(
+    beats.map(([seq, chain, tMs, ibi, clean]) => ({
+      band_id: bandId,
+      boot_id: bootId,
+      beat_seq: seq,
+      chain,
+      t_ms: tMs,
+      ibi_ms: ibi,
+      clean: clean === true || clean === 1,
+    })),
+    { onConflict: "band_id,boot_id,beat_seq", ignoreDuplicates: true },
+  );
+  if (error) {
+    console.error(`[DB] device_beats insert failed — band=${bandId}:`, error.message);
+    return error.message;
+  }
+  return null;
+}
 
 async function insertTelemetryOnce(
   bandId: string,
   seq: number,
   p: SensorPayload,
 ): Promise<string | null> {
+  const hasBoot = p.boot !== undefined;
   const { error } = await supabase.from("device_telemetry").insert({
     band_id: bandId,
     seq: seq,
@@ -181,9 +180,14 @@ async function insertTelemetryOnce(
     gz: p.gz ?? 0,
     temp: p.temp ?? 0,
     hr: sensorOrNull(p.hr),
-    hrv: sensorOrNull(p.hrv),
     spo2: sensorOrNull(p.spo2),
     gsr: p.gsr ?? 0,
+    // With a boot id, the insert trigger computes hrv from device_beats and
+    // the band's own figure is kept for comparison. Older firmware sends no
+    // beats, so its figure is the only one and goes straight into hrv.
+    boot_id: hasBoot ? p.boot : null,
+    hrv_device: sensorOrNull(p.hrv),
+    ...(hasBoot ? {} : { hrv: sensorOrNull(p.hrv) }),
   });
 
   if (error) {
@@ -195,12 +199,9 @@ async function insertTelemetryOnce(
     );
     return error.message;
   }
-
-  console.info(`[DB] device_telemetry OK — band=${bandId} seq=${seq}`);
   return null;
 }
 
-// Retry wrapper: 1 retry with 500ms delay for transient failures
 async function insertTelemetry(
   bandId: string,
   seq: number,
@@ -209,53 +210,10 @@ async function insertTelemetry(
   const firstError = await insertTelemetryOnce(bandId, seq, p);
   if (!firstError) return null;
 
-  // Wait 500ms and retry once
   await new Promise((r) => setTimeout(r, 500));
   console.info(`[DB] Retrying device_telemetry — band=${bandId} seq=${seq}`);
   return insertTelemetryOnce(bandId, seq, p);
 }
-
-// ============================================================
-// Write to wearable_samples (derived / ML table)
-// ============================================================
-
-async function insertWearableSample(
-  deviceId: string,
-  bandId: string,
-  seq: number,
-  p: SensorPayload,
-): Promise<void> {
-  const { error } = await supabase.from("wearable_samples").insert({
-    device_id: deviceId,
-    session_id: null,
-    band_id: bandId,
-    sequence_number: seq,
-    device_timestamp: p.t,
-    accelerometer_x: p.ax ?? null,
-    accelerometer_y: p.ay ?? null,
-    accelerometer_z: p.az ?? null,
-    gyroscope_x: p.gx ?? null,
-    gyroscope_y: p.gy ?? null,
-    gyroscope_z: p.gz ?? null,
-    skin_temperature: p.temp ?? null,
-    heart_rate: sensorOrNull(p.hr),
-    hrv: sensorOrNull(p.hrv),
-    spo2: sensorOrNull(p.spo2),
-    gsr: p.gsr ?? null,
-    captured_at: new Date().toISOString(),
-  });
-
-  if (error) {
-    console.warn(
-      `[DB] wearable_samples insert failed — band=${bandId} seq=${seq}:`,
-      error.message,
-    );
-  }
-}
-
-// ============================================================
-// Main handler
-// ============================================================
 
 Deno.serve(async (req) => {
   const url = new URL(req.url);
@@ -267,12 +225,6 @@ Deno.serve(async (req) => {
       endpoint: "websocket",
     });
   }
-
-  // ----------------------------------------------------------
-  // Authentication via query parameters
-  // ESP32 cannot set arbitrary HTTP headers during the WS
-  // handshake, so credentials come as ?band_id=&token=
-  // ----------------------------------------------------------
 
   const bandId = url.searchParams.get("band_id");
   const deviceToken = url.searchParams.get("token");
@@ -292,7 +244,7 @@ Deno.serve(async (req) => {
     .from("device_credentials")
     .select(
       `id, device_id, revoked_at,
-       sensor_devices!inner (id, device_uid, device_name, status, is_online)`,
+       sensor_devices!inner (id, device_uid, device_name, status, metadata)`,
     )
     .eq("token_hash", tokenHash)
     .eq("sensor_devices.device_uid", bandId)
@@ -326,51 +278,25 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: "DEVICE_INACTIVE" }, 403);
   }
 
-  // ----------------------------------------------------------
-  // Upgrade to WebSocket
-  // ----------------------------------------------------------
-
   const { socket, response } = Deno.upgradeWebSocket(req, { idleTimeout: 0 });
 
   let resolveSocketClosed!: () => void;
   const socketClosed = new Promise<void>((r) => { resolveSocketClosed = r; });
 
-  // @ts-ignore
+  // @ts-ignore EdgeRuntime is provided by the Supabase runtime
   EdgeRuntime.waitUntil(socketClosed);
 
   let lastSequence = -1;
 
-  // Update credential last-used timestamp (non-blocking)
-  // @ts-ignore
-  EdgeRuntime.waitUntil(
+  runInBackground("device_credentials.last_used_at", () =>
     supabase
       .from("device_credentials")
       .update({ last_used_at: new Date().toISOString() })
-      .eq("id", credential.id),
+      .eq("id", credential.id)
   );
-
-  // ----------------------------------------------------------
-  // Socket open
-  // ----------------------------------------------------------
-
-  // Heartbeat interval handle — cleared on close
-  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
   socket.onopen = () => {
     console.info(`[WS] Connection opened — band=${device.device_uid}`);
-
-    // Expire any stale "online" flags from crashed sessions
-    // @ts-ignore
-    EdgeRuntime.waitUntil(expireStaleDevices());
-
-    // @ts-ignore
-    EdgeRuntime.waitUntil(markDeviceOnline(device.id));
-
-    // Update last_online_at every 30 seconds so the staleness
-    // guard knows this device is still alive.
-    heartbeatTimer = setInterval(() => {
-      heartbeatOnline(device.id).catch(() => {});
-    }, 30_000);
 
     send(socket, {
       type: "authenticated",
@@ -379,10 +305,6 @@ Deno.serve(async (req) => {
       server_time: Date.now(),
     });
   };
-
-  // ----------------------------------------------------------
-  // Message handler
-  // ----------------------------------------------------------
 
   socket.onmessage = async (event) => {
     if (typeof event.data !== "string") {
@@ -403,13 +325,55 @@ Deno.serve(async (req) => {
       return;
     }
 
-    // ---- device_hello (backward-compatible) ------------------
     if (message.type === "device_hello") {
       if (message.band_id !== device.device_uid) {
         send(socket, { type: "error", code: "BAND_ID_MISMATCH" });
         socket.close(1008, "Band ID mismatch");
         return;
       }
+
+      // Firmware 0.4.2+ reports its version, chip MAC and boot diagnostics.
+      // BAND_ID is set by hand, so a MAC that differs from the one first
+      // seen for this band means two bands share one identity.
+      const metadata = (device.metadata ?? {}) as Record<string, unknown>;
+      const mac = typeof message.mac === "string" ? message.mac : null;
+      const knownMac = typeof metadata.chip_mac === "string" ? metadata.chip_mac : null;
+      if (mac && knownMac && mac !== knownMac) {
+        console.error(
+          `[AUTH] ${device.device_uid} connected from chip MAC ${mac}, but it is registered ` +
+          `to ${knownMac}: two bands may share this BAND_ID`,
+        );
+      }
+      const lastHello = {
+        at: new Date().toISOString(),
+        fw: message.fw ?? null,
+        mac,
+        reset: message.reset ?? null,
+        boot: message.boot ?? null,
+        boot_count: message.boot_count ?? null,
+        uptime_ms: message.uptime_ms ?? null,
+        prev_uptime_s: message.prev_uptime_s ?? null,
+        prev_step: message.prev_step ?? null,
+      };
+      const nextMetadata = {
+        ...metadata,
+        ...(knownMac === null && mac ? { chip_mac: mac } : {}),
+        ...(mac && knownMac && mac !== knownMac
+          ? { mac_mismatch: { seen: mac, at: lastHello.at } }
+          : {}),
+        last_hello: lastHello,
+      };
+      device.metadata = nextMetadata;
+      runInBackground("sensor_devices hello", () =>
+        supabase
+          .from("sensor_devices")
+          .update({
+            ...(typeof message.fw === "string" ? { firmware_version: message.fw } : {}),
+            metadata: nextMetadata,
+          })
+          .eq("id", device.id)
+      );
+
       send(socket, {
         type: "device_ready",
         band_id: device.device_uid,
@@ -419,15 +383,12 @@ Deno.serve(async (req) => {
       return;
     }
 
-    // ---- ping ------------------------------------------------
     if (message.type === "ping") {
       send(socket, { type: "pong", server_time: Date.now() });
       return;
     }
 
-    // ---- sensor_data -----------------------------------------
     if (message.type === "sensor_data") {
-      // Accept both flat and nested (data:{}) shapes
       const payload = extractSensorPayload(message);
 
       if (!payload) {
@@ -452,11 +413,9 @@ Deno.serve(async (req) => {
         return;
       }
 
-      // Always use the authenticated device's band_id — never trust the payload
       const safeBandId = device.device_uid;
       const seq = payload.seq;
 
-      // Duplicate / out-of-order guard
       if (lastSequence >= 0 && seq <= lastSequence) {
         console.warn(
           `[MSG] Duplicate/OOO — band=${safeBandId} seq=${seq} last=${lastSequence}`,
@@ -470,16 +429,13 @@ Deno.serve(async (req) => {
         return;
       }
 
-      // ---- Write to device_telemetry (primary / raw table) ----
-      const insertError = await insertTelemetry(safeBandId, seq, payload);
+      // A failed beats insert must not cost the telemetry row: hrv is then
+      // NULL (or computed from fewer beats) for a moment, nothing more.
+      if (payload.boot !== undefined && payload.beats && payload.beats.length > 0) {
+        await insertBeats(safeBandId, payload.boot, payload.beats);
+      }
 
-      // ---- Write to wearable_samples (secondary; best-effort) -
-      // Always attempt even if device_telemetry failed — one table
-      // failing must never block the other.
-      // @ts-ignore
-      EdgeRuntime.waitUntil(
-        insertWearableSample(device.id, safeBandId, seq, payload),
-      );
+      const insertError = await insertTelemetry(safeBandId, seq, payload);
 
       if (insertError) {
         send(socket, {
@@ -493,9 +449,6 @@ Deno.serve(async (req) => {
 
       lastSequence = seq;
 
-            // Realtime is driven by the database insert above. Supabase Realtime
-      // streams the new row to authenticated dashboard subscribers.
-
       send(socket, { type: "ack", seq, accepted: true, server_time: Date.now() });
       return;
     }
@@ -503,39 +456,15 @@ Deno.serve(async (req) => {
     send(socket, { type: "error", code: "UNKNOWN_MESSAGE_TYPE" });
   };
 
-  // ----------------------------------------------------------
-  // Socket error
-  // ----------------------------------------------------------
-
   socket.onerror = (event) => {
-    console.error(
-      `[WS] Error — band=${device.device_uid}:`,
-      (event as ErrorEvent).message ?? event,
-    );
-    // Ensure device is marked offline on error too
-    // @ts-ignore
-    EdgeRuntime.waitUntil(markDeviceOffline(device.id));
+    console.error(`[WS] Error — band=${device.device_uid}:`, (event as ErrorEvent).message ?? event);
   };
-
-  // ----------------------------------------------------------
-  // Socket close
-  // ----------------------------------------------------------
 
   socket.onclose = (event) => {
     console.info(
       `[WS] Connection closed — band=${device.device_uid}` +
       ` code=${event.code} reason=${event.reason || "(none)"}`,
     );
-
-    // Stop heartbeat
-    if (heartbeatTimer !== null) {
-      clearInterval(heartbeatTimer);
-      heartbeatTimer = null;
-    }
-
-    // @ts-ignore
-    EdgeRuntime.waitUntil(markDeviceOffline(device.id));
-
     resolveSocketClosed();
   };
 
