@@ -81,7 +81,7 @@
 // CONFIGURATION — edit these
 // ============================================================
 
-#define FIRMWARE_VERSION "0.6.2"
+#define FIRMWARE_VERSION "0.6.3"
 
 // Beat-detector trace (~3 lines/s plus one per beat). Keep 0 in normal
 // use: at that rate it pushes crash output out of the serial monitor.
@@ -155,6 +155,13 @@ bool        previousBootSeen = false;
 // long after WiFi.begin() so a stale status from the previous attempt
 // cannot fail the new one.
 #define WIFI_STATUS_GRACE_MS      1500
+// WiFi.disconnect() only waits for a link that is up. While the driver is
+// still hunting for the previous network it returns at once, and the next
+// WiFi.begin() is refused ("sta is connecting, cannot set config"). Such a
+// refused start is retried this often, a bounded number of times, without
+// counting as a failed join.
+#define WIFI_START_RETRY_MS        500
+#define WIFI_START_MAX_RETRIES       6
 
 // Server stage: report NO_INTERNET after this long on Wi-Fi without
 // authenticating, and cycle the Wi-Fi link if it lasts this long.
@@ -1611,9 +1618,27 @@ void stopCloud() {
 // ============================================================
 
 void startWifiAttempt(unsigned long now) {
+  static uint8_t refusedStarts = 0;
   lastDisconnectReason = 0;
-  WiFi.begin(activeCreds.ssid,
-             activeCreds.password[0] ? activeCreds.password : nullptr);
+  const wl_status_t started =
+      WiFi.begin(activeCreds.ssid, activeCreds.password[0] ? activeCreds.password : nullptr);
+
+  // Refused: the driver is still busy with the previous join, so it kept the
+  // OLD network. Stop that join and try again shortly. Not a failure of the
+  // new network: no backoff growth, no failure status. Bounded, because
+  // begin() can also echo a stale WL_CONNECT_FAILED from the last attempt;
+  // after the limit the attempt proceeds and the normal timeout applies.
+  if (started == WL_CONNECT_FAILED && refusedStarts < WIFI_START_MAX_RETRIES) {
+    refusedStarts++;
+    Serial.printf("[WIFI] Driver busy with the previous join; retrying \"%s\" in %u ms (%u/%u)\n",
+                  activeCreds.ssid, (unsigned)WIFI_START_RETRY_MS,
+                  (unsigned)refusedStarts, (unsigned)WIFI_START_MAX_RETRIES);
+    WiFi.disconnect(false);
+    wifiNextAttemptAt = now + WIFI_START_RETRY_MS;
+    setNetState(NetState::WifiBackoff, now);
+    return;
+  }
+  refusedStarts = 0;
   wifiAttemptStartedAt = now;
   setNetState(NetState::WifiConnecting, now);
 }
