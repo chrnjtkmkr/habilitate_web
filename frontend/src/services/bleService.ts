@@ -101,6 +101,38 @@ export interface HabilitateBluetoothDevice {
   ): void;
 }
 
+// Chrome's gatt.connect() has no timeout of its own: to a band that is
+// switched off or out of range it can hang for a long time, and the UI
+// would sit on "Connecting..." with no way forward. Every connect goes
+// through here and gives up after this long.
+export const BLE_CONNECT_TIMEOUT_MS = 10_000;
+export const BAND_NOT_FOUND_MESSAGE =
+  'The band could not be reached. Check that it is switched on and nearby, then try again.';
+
+export async function connectGatt(
+  device: HabilitateBluetoothDevice,
+  timeoutMs = BLE_CONNECT_TIMEOUT_MS,
+): Promise<HabilitateBluetoothGattServer> {
+  const gatt = device.gatt;
+  if (!gatt) {
+    throw new Error('Habilitate band does not expose a GATT server.');
+  }
+  if (gatt.connected) return gatt;
+
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const timeout = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      gatt.disconnect(); // abandons the pending connect
+      reject(new Error(BAND_NOT_FOUND_MESSAGE));
+    }, timeoutMs);
+  });
+  try {
+    return await Promise.race([gatt.connect(), timeout]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 interface HabilitateBluetoothAPI {
   requestDevice(options: {
     filters: Array<{
@@ -185,9 +217,7 @@ export async function connectToHabilitateBand(): Promise<{
     );
   }
 
-  const server = device.gatt.connected
-    ? device.gatt
-    : await device.gatt.connect();
+  const server = await connectGatt(device);
 
   const service =
     await server.getPrimaryService(
@@ -267,9 +297,7 @@ export async function reconnectToAuthorizedHabilitateBand(
       return null;
     }
 
-    const server = device.gatt.connected
-      ? device.gatt
-      : await device.gatt.connect();
+    const server = await connectGatt(device);
 
     const service =
       await server.getPrimaryService(
@@ -333,9 +361,7 @@ async function getHabilitateService(
     );
   }
 
-  const server = device.gatt.connected
-    ? device.gatt
-    : await device.gatt.connect();
+  const server = await connectGatt(device);
 
   return server.getPrimaryService(
     HABILITATE_SERVICE_UUID,

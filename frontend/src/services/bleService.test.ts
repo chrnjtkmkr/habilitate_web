@@ -1,6 +1,6 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
-import { reconnectToAuthorizedHabilitateBand } from './bleService';
+import { BLE_CONNECT_TIMEOUT_MS, reconnectToAuthorizedHabilitateBand } from './bleService';
 
 // A band the browser has already authorised, reachable without a picker.
 function authorisedBand(bandId: string) {
@@ -36,5 +36,22 @@ describe('reconnectToAuthorizedHabilitateBand', () => {
   it('restores nothing when no band is remembered', async () => {
     stubBluetooth([authorisedBand('HAB-001')]);
     expect(await reconnectToAuthorizedHabilitateBand(null)).toBeNull();
+  });
+
+  it('gives up after the connect timeout when the remembered band is off', async () => {
+    vi.useFakeTimers();
+    try {
+      const band = authorisedBand('HAB-001');
+      const disconnect = vi.fn();
+      Object.assign(band.gatt, { connected: false, connect: () => new Promise<never>(() => {}), disconnect });
+      stubBluetooth([band]);
+
+      const pending = reconnectToAuthorizedHabilitateBand('HAB-001');
+      await vi.advanceTimersByTimeAsync(BLE_CONNECT_TIMEOUT_MS);
+      expect(await pending).toBeNull();
+      expect(disconnect).toHaveBeenCalled();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
